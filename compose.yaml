@@ -1,0 +1,28 @@
+# Build the static binaries inside a throwaway Go container so the host needs no
+# Go toolchain. Output lands in ./dist (bind-mounted) as native, dependency-free
+# binaries that run on the host with no Docker and no Go.
+#
+#   docker compose up        # builds dist/, streams logs, then exits
+#   docker compose down      # remove the exited container (optional cleanup)
+#
+# This is a BUILD tool only. Do not run the MCP server itself in Docker: it is an
+# stdio server the agent launches per session, and dockerizing the runtime would
+# re-add a Docker dependency on every machine, defeating the static binary.
+services:
+  build:
+    image: golang:1.25-bookworm
+    user: "1000:1000" # host neo1 (uid:gid); change if `id -u` / `id -g` differs
+    working_dir: /src
+    restart: "no"
+    environment:
+      # Let Go fetch a newer toolchain if a dependency requires one.
+      GOTOOLCHAIN: auto
+      # Pass through a version for build.sh to stamp into the binaries.
+      VERSION: ${VERSION:-}
+      # Keep module and build caches inside the project (gitignored), owned by
+      # the host user, so nothing lands in system-wide host directories.
+      GOCACHE: /src/.cache/go-build
+      GOMODCACHE: /src/.cache/go-mod
+    volumes:
+      - .:/src
+    command: bash -c "go mod tidy && bash build.sh"

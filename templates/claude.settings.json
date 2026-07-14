@@ -1,0 +1,26 @@
+{
+  "autoMemoryEnabled": false,
+  "enabledMcpjsonServers": ["memory"],
+  "permissions": {
+    "allow": [
+      "mcp__memory__memory_add",
+      "mcp__memory__memory_recent",
+      "mcp__memory__memory_search",
+      "mcp__memory__memory_get"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.sh\" sync"
+          }
+        ]
+      }
+    ]
+  }
+}
