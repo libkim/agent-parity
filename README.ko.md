@@ -4,24 +4,29 @@
   <img src="assets/logo.png" alt="agent-parity" width="360">
 </p>
 
-[English](README.md) · [한국어](README.ko.md)
+<p align="center"><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
 
-코딩 에이전트는 저마다 메모리, 스킬, 지침 파일을 따로 둡니다. 그래서 에이전트를 바꾸거나 팀과 저장소를 공유하면 동작이 제각각이고 매번 다시 설정해야 합니다. agent-parity는 이 문제를 해결합니다. 한 번 설치하면 Claude Code, Codex, Cursor, Antigravity가 같은 메모리를 공유하고 같은 스킬과 지침(`AGENTS.md`)을 읽으며, 이 모든 것이 git을 통해 저장소와 함께 옮겨 다닙니다.
+코딩 에이전트는 저마다 메모리, 스킬, 지침 파일을 따로 둡니다. 그래서 에이전트를 바꾸거나 팀과 저장소를 공유하면 동작이 제각각이고 매번 다시 설정해야 합니다. agent-parity는 이 공유 환경(메모리·스킬·지침)을 저장소에 커밋하는 **코드형 환경(Environment as Code)** 으로 정의해 이 문제를 해결합니다. 한 번 설치하면 Claude Code, Codex, Cursor, Antigravity가 같은 메모리를 공유하고 같은 스킬과 지침(`AGENTS.md`)을 읽습니다.
 
-## 지원 에이전트
+## 특징
 
-2026-07-10 검증 기준입니다. 표는 agent-parity 설치 후에도 남는 승인 관문을 보여 줍니다. 패키지가 설치하는 프로젝트 설정으로 자동 승인할 수 있는 관문은 모두 자동으로 처리합니다. 프로젝트 신뢰는 언제나 수동 1회 프롬프트이고, `필요`로 남은 셀은 그 에이전트에서 프로젝트 파일로 자동화할 수 없는 관문입니다.
+- **의존성 없음** — 정적 바이너리 하나로 돌아가며, Go·Node 같은 런타임을 설치할 필요가 없습니다.
+- **비침습** — 저장소에 커밋되는 프로젝트 스코프 파일만 만들고, 전역 설정은 건드리지 않습니다.
+- **비파괴적** — 기존 파일을 덮어쓰지 않고 필요한 항목만 병합해, 이미 있는 설정과 함께 놓입니다.
+- **무설치** — 한 번 커밋해 두면 저장소를 받은 다른 머신은 다시 설치하지 않고 바로 씁니다.
 
-| 에이전트 | 기준 버전 | 프로젝트 신뢰 | MCP 서버 승인 | 도구 실행 승인 |
-| --- | --- | --- | --- | --- |
-| Claude Code | 2.1.197 | 필요 | 불필요 | 불필요 |
-| Codex CLI | 0.144.1 | 필요 | 불필요 | 불필요 |
-| Cursor Agent | 2026.06.24-00-45-58-9f61de7 | 필요 | 필요 | 불필요 |
-| Antigravity CLI | 1.0.12 | 필요 | 불필요 | 필요 |
+## 지원 에이전트 (2026-07-10 검증 기준)
+
+| 에이전트 | 기준 버전 |
+| --- | --- |
+| Claude Code | 2.1.197 |
+| Codex CLI | 0.144.1 |
+| Cursor Agent | 2026.06.24-00-45-58-9f61de7 |
+| Antigravity CLI | 1.0.12 |
 
 ## 사용 방법
 
-아래 설치 명령을 프로젝트 루트에서 실행한 뒤, 평소처럼 에이전트를 실행하면 끝입니다. 설치가 끝나면 새 세션에서 `memory` 서버가 네 가지 도구(`memory_recent`, `memory_add`, `memory_search`, `memory_get`)와 함께 올라오므로, 따로 할 일은 없습니다.
+프로젝트 루트에서 설치 명령을 실행한 뒤 에이전트 세션을 재시작하세요.
 
 ### 설치
 
@@ -37,14 +42,26 @@ Native Windows PowerShell:
 irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 ```
 
-설치 명령이 하는 일은 다음과 같습니다.
+### 기존 설정이 있는 프로젝트에 도입하기
 
-- 지원 플랫폼용 사전 빌드 바이너리를 내려받습니다(호스트에 Go가 필요 없습니다). 커밋해 두면 저장소를 pull한 어떤 머신에서도 추가 설정 없이 동작합니다.
-- 프로젝트 로컬 관리 스크립트(`.agents/bin/agent-parity`)를 설치합니다.
-- 각 에이전트 설정에 `memory` 서버를 등록합니다. 기존 설정에는 항목을 병합해 넣고 다른 MCP 서버는 그대로 둡니다(JSON은 다시 파싱하고, TOML은 테이블을 덧붙입니다). 이미 다른 서버를 가리키는 `memory` 항목이 있으면 건드리지 않고 교체용 스니펫만 출력합니다.
-- 스킬 동기화를 배선하고, `AGENTS.md`에 지침 블록을 덧붙이고, `.agents/memory`에 메모리 저장소를 만듭니다.
+이미 메모리 서버, 공유 스킬, 자체 지침을 운영 중인 프로젝트에 설치해도 기존 것을 덮어쓰지 않고, 아무것도 추측하지 않습니다.
 
-## 관리 명령어
+- 다른 MCP 서버가 있는 설정에는 memory 항목을 병합하고 나머지는 보존합니다. 이미 다른 서버를 가리키는 `memory` 항목이 있으면 교체 스니펫과 함께 보고하며, 그 항목의 교체는 사용자가 합니다.
+- 기존 동기화 스크립트와 훅은 그대로 두고, 기존 `.claude/skills`는 `.agents/skills/`로 승격합니다.
+- 이미 메모리 도구를 다루는 `AGENTS.md`에는 블록을 덧붙일 때 중복 검토 안내를 출력합니다. 겹치는 부분은 사용자가 직접 합칩니다.
+
+### 승인
+
+여러 에이전트가 메모리를 동일한 방식으로 사용할 수 있도록 `memory` MCP를 사용합니다. 표에서 '필요'로 표시된 항목은 에이전트 세션에서 뜨는 승인 창에서 허용을 선택해 직접 승인해야 사용할 수 있습니다.
+
+| 에이전트 | MCP 서버 승인 | 도구 실행 승인 |
+| --- | --- | --- |
+| Claude Code | 불필요 | 불필요 |
+| Codex CLI | 불필요 | 불필요 |
+| Cursor Agent | 필요 | 불필요 |
+| Antigravity CLI | 불필요 | 필요 |
+
+### 관리 명령어
 
 첫 설치 후에는 프로젝트 로컬 관리 스크립트를 씁니다. 각 명령은 Linux/macOS/WSL에서 `./.agents/bin/agent-parity <명령>`, Windows PowerShell에서 `.\.agents\bin\agent-parity.cmd <명령>`으로 실행합니다. bootstrap 스크립트를 직접 실행할 때 `[dir]`을 생략하면 현재 디렉터리를 대상으로 합니다.
 
@@ -87,6 +104,20 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 
 </details>
 
+## 동작 방식
+
+설치되는 파일은 모두 저장소에 커밋합니다. 첫 머신에서 `install`을 한 번 실행하면 바이너리와 배선이 저장소에 담기고(vendoring), 그 뒤로 pull하는 다른 머신은 다시 설치할 필요가 없습니다. `.claude/`는 세션마다 `.agents/`에서 다시 생성되므로 git에서 뺍니다. `.gitignore`가 이 파일들을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
+
+도구가 넣은 부분(에이전트 설정, `AGENTS.md`·`.gitignore`의 마커 블록, 배선 파일)은 `update`가 다시 쓰고 `uninstall`이 지웁니다 — 단, 네가 한 번이라도 손대면 그 뒤로는 건드리지 않습니다. 반면 메모리 저장소와 `.agents/skills/`의 스킬은 네 것이라 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 Claude 전용으로 있던 `.claude/skills`는 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 하고, `uninstall` 후에도 그 사본은 남겨 동기화 없이 스킬이 유지됩니다.
+
+### 메모리
+
+각 메모리는 `created`, `tags`, `strength`, `lastAccessed` 프론트매터를 가진 마크다운 파일입니다. `memory_search`는 `일치 × exp(-경과일 / strength)`로 점수를 매기고, 회상할 때 `strength`를 올립니다. 자주 쓰는 메모리는 살아남고 묵은 것은 가라앉습니다.
+
+### 스킬
+
+표준 Agent Skills(`<name>/SKILL.md`)를 `.agents/skills/`에 넣습니다. Codex, Cursor, Antigravity CLI는 거기서 바로 불러옵니다. Claude Code는 설치된 SessionStart 훅이 플랫폼 동기화 스크립트(Unix는 `sync-claude.sh`, native Windows는 `sync-claude.ps1`)를 실행해 세션이 시작될 때마다 `.agents/` 원본에서 `.claude/skills`와 `.claude/settings.json`을 다시 만듭니다. 수정은 원본에만 하고, 생성된 사본은 언제든 버려도 됩니다. `.claude/settings.local.json`은 절대 건드리지 않으므로 머신 로컬 설정은 로컬에 남습니다.
+
 ## 설치 시 생성되는 파일
 
 | 경로 | 내용 |
@@ -104,41 +135,6 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 | `.codex/config.toml` | Codex 등록 |
 | `AGENTS.md` | 마커로 구분된 지침 블록 |
 | `CLAUDE.md` | `@AGENTS.md` 임포트 래퍼 (없을 때만 생성) |
-
-관리 스크립트는 `.agents/bin/` 아래에 있는 프로젝트 로컬 파일입니다. 설치기는 셸 프로필, 사용자 PATH, 시스템 앱 등록 정보를 건드리지 않습니다. 더 짧은 명령을 원하면 `.agents/bin`을 직접 PATH에 추가하면 됩니다.
-
-이 파일들은 모두 커밋합니다. 첫 머신에서 `install`을 한 번 실행하면 바이너리와 배선이 저장소에 벤더링(vendoring)되므로, **그 뒤로 저장소를 pull하는 다른 머신은 무설치(zero-install)** 입니다 — pull만 하면 실행되고 `npx`·`uvx` 기반 도구처럼 환경마다 다시 install하지 않습니다. 메모리 저장소와 스킬은 프로젝트의 맥락이고, `.claude/`는 세션마다 `.agents/`에서 다시 생성되므로 git 밖에 둡니다.
-
-git은 선택입니다. 깃허브를 통해 공유하는 것은 팀이나 여러 머신과 함께 쓸 때만 필요하고, 한 머신에서만 쓴다면 git 없이도 설치·실행됩니다.
-
-프로젝트의 `.gitignore`가 이 파일들을 가리면(예: 전부 무시하고 화이트리스트만 추적하는 정책), `install`과 `update`가 마커로 감싼 규칙 블록을 넣어 원본은 추적되고 생성물 `.claude/`는 추적되지 않게 합니다. `uninstall`은 그 블록을 제거하고, `status`는 아직 가려진 산출물이 있으면 경고합니다. `.gitignore`가 방해하지 않는 프로젝트에서는 아무것도 하지 않습니다.
-
-## 거버넌스
-
-도구가 건드리는 것은 네 부류로 나뉘고, 부류마다 규칙은 하나입니다.
-
-1. **관리 영역** — `AGENTS.md`와 `.gitignore`의 마커로 구분된 블록, 그리고 그대로(verbatim) 써넣은 배선 파일들입니다: 에이전트 설정, `CLAUDE.md` 래퍼, 동기화 스크립트, 훅 설정. `install`이 만들고 `update`가 다시 쓰고 `uninstall`이 제거합니다. 소유권은 마커 또는 바이트 동일성으로 판별하므로, 사용자가 한 번 고치면 더 이상 도구의 것이 아니게 되어 건드리지 않습니다.
-2. **함께 넣는 도구** — `.agents/mcp/memory/` 아래의 런처와 바이너리입니다. `update`가 교체하고 `uninstall`이 삭제합니다.
-3. **사용자의 산출물** — 메모리 저장소와 `.agents/skills/`입니다. 수정도 삭제도 하지 않습니다. `--purge`를 주면 저장소만 삭제합니다. 기존 `.claude/skills`는 설치할 때 `.agents/skills/`로 승격합니다: 스킬은 self-contained 폴더라 이동이 기계적이고, Claude 전용 스킬이 공유 스킬이 됩니다. 이름이 충돌하면 `<이름>.from-claude`로 비켜 두니 직접 병합하면 됩니다.
-4. **사용자의 산문** — `GEMINI.md`나 레거시 `.cursorrules`처럼 한 에이전트만 읽는 지침 파일입니다. 산문 병합은 기계가 아니라 편집의 일이므로, `install`과 `status`가 parity 위반으로 보고만 하고 절대 건드리지 않습니다.
-
-`uninstall`은 1·2부류를 제거합니다. 내용이 있는 `.claude/skills` 미러는 정적 사본으로 남겨, 동기화 없이도 Claude Code가 스킬을 유지하게 합니다.
-
-## 기존 설정이 있는 프로젝트에 도입하기
-
-이미 메모리 서버, 공유 스킬, 자체 지침을 운영 중인 프로젝트에도 같은 부류 규칙이 그대로 적용되며, 아무것도 추측하지 않습니다.
-
-- 다른 MCP 서버가 있는 설정에는 memory 항목을 병합하고 나머지는 보존합니다. 이미 다른 서버를 가리키는 `memory` 항목이 있으면 교체 스니펫과 함께 보고하며, 그 항목의 교체는 사용자가 합니다.
-- 기존 동기화 스크립트와 훅은 그대로 두고, 기존 `.claude/skills`는 위에서 설명한 대로 승격합니다.
-- 이미 메모리 도구를 다루는 `AGENTS.md`에는 블록을 덧붙일 때 중복 검토 안내를 출력합니다. 겹치는 부분은 사용자가 직접 합칩니다.
-
-## 메모리 동작 방식
-
-각 메모리는 `created`, `tags`, `strength`, `lastAccessed` 프론트매터를 가진 마크다운 파일입니다. `memory_search`는 `일치 × exp(-경과일 / strength)`로 점수를 매기고, 회상할 때 `strength`를 올립니다. 자주 쓰는 메모리는 살아남고 묵은 것은 가라앉습니다.
-
-## 스킬 동작 방식
-
-표준 Agent Skills(`<name>/SKILL.md`)를 `.agents/skills/`에 넣습니다. Codex, Cursor, Antigravity CLI는 거기서 바로 불러옵니다. Claude Code는 설치된 SessionStart 훅이 플랫폼 동기화 스크립트(Unix는 `sync-claude.sh`, native Windows는 `sync-claude.ps1`)를 실행해 세션이 시작될 때마다 `.agents/` 원본에서 `.claude/skills`와 `.claude/settings.json`을 다시 만듭니다. 수정은 원본에만 하고, 생성된 사본은 언제든 버려도 됩니다. `.claude/settings.local.json`은 절대 건드리지 않으므로 머신 로컬 설정은 로컬에 남습니다.
 
 ## 라이선스
 
