@@ -26,6 +26,14 @@
 | Cursor Agent | 2026.06.24-00-45-58-9f61de7 |
 | Antigravity CLI | 1.1.1 |
 
+## 지원 플랫폼
+
+| OS | 아키텍처 |
+| --- | --- |
+| Linux | x86_64, arm64 (Termux/Android 포함) |
+| macOS | x86_64, arm64 |
+| Windows | x86_64 |
+
 ## 사용 방법
 
 프로젝트 루트에서 설치 명령을 실행한 뒤 에이전트 세션을 재시작하세요.
@@ -70,7 +78,7 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 | 명령 | 설명 |
 | --- | --- |
 | `status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
-| `version` | 설치된 서버 바이너리의 버전을 보고합니다. 바이너리 자체는 `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`으로도 답합니다. |
+| `version` | 설치된 버전을 보고합니다(환경 전체의 버전이며 메모리 서버 바이너리에 새겨져 있고, 바이너리 자체는 `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`으로도 답합니다). |
 | `update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 바이너리·런처·등록·스킬 배선·Claude 설정·마커 블록. |
 | `uninstall` | 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다. |
 
@@ -132,11 +140,11 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 | `.agents/skills/` | 공유 스킬 원본 (사용자가 채우는 곳) |
 | `.agents/scripts/sync-claude.{sh,ps1}` | 스킬을 `.claude`로 미러링하는 동기화 스크립트. 설치한 OS의 것만 생성됩니다(Unix는 `.sh`, Windows는 `.ps1`). |
 | `.agents/claude/settings.json` | 동기화 훅이 담긴 Claude 설정 원본 (OS별 내용) |
-| `.agents/mcp_config.json` | Antigravity CLI 등록 |
-| `.mcp.json` | Claude Code 등록 |
-| `.cursor/mcp.json` | Cursor 등록 |
-| `.cursor/cli.json` | Cursor 도구 자동 승인 허용목록 |
-| `.codex/config.toml` | Codex 등록 |
+| `.agents/mcp_config.json` | Antigravity CLI에 메모리 서버 등록 |
+| `.mcp.json` | Claude Code에 메모리 서버 등록 |
+| `.cursor/mcp.json` | Cursor에 메모리 서버 등록 |
+| `.cursor/cli.json` | Cursor용 메모리 도구 자동 승인 허용목록 |
+| `.codex/config.toml` | Codex에 메모리 서버 등록 |
 | `AGENTS.md` | 마커로 구분된 지침 블록 |
 | `CLAUDE.md` | `@AGENTS.md` 임포트 래퍼 (없을 때만 생성) |
 

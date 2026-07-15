@@ -31,6 +31,14 @@ the same skills and instructions (`AGENTS.md`).
 | Cursor Agent | 2026.06.24-00-45-58-9f61de7 |
 | Antigravity CLI | 1.1.1 |
 
+## Supported platforms
+
+| OS | Architectures |
+| --- | --- |
+| Linux | x86_64, arm64 (incl. Termux/Android) |
+| macOS | x86_64, arm64 |
+| Windows | x86_64 |
+
 ## Usage
 
 Run the install command below in your project's root, then restart your agent
@@ -86,7 +94,7 @@ the bootstrap script directly, `[dir]` defaults to the current directory.
 | Command | Description |
 | --- | --- |
 | `status` | Checks the project files and the locally available agent CLIs. |
-| `version` | Reports the installed server binary's version. The binary itself also answers `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`. |
+| `version` | Reports the installed version (it stamps the whole environment and is carried by the memory server binary, which also answers `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`). |
 | `update` | Re-applies everything at the latest release — binaries, launchers, registrations, skills wiring, Claude settings, and the marker blocks. |
 | `uninstall` | Removes the installed artifacts. Add `--purge` to delete the memory store as well. |
 
@@ -177,11 +185,11 @@ local.
 | `.agents/skills/` | shared skills source (yours to fill) |
 | `.agents/scripts/sync-claude.{sh,ps1}` | sync script that mirrors skills into `.claude`. Only the one for the installing OS is created (`.sh` on Unix, `.ps1` on Windows). |
 | `.agents/claude/settings.json` | Claude settings source with the sync hook (OS-specific contents) |
-| `.agents/mcp_config.json` | Antigravity CLI registration |
-| `.mcp.json` | Claude Code registration |
-| `.cursor/mcp.json` | Cursor registration |
-| `.cursor/cli.json` | Cursor tool auto-approval allowlist |
-| `.codex/config.toml` | Codex registration |
+| `.agents/mcp_config.json` | memory server registered for Antigravity CLI |
+| `.mcp.json` | memory server registered for Claude Code |
+| `.cursor/mcp.json` | memory server registered for Cursor |
+| `.cursor/cli.json` | memory-tool auto-approval allowlist for Cursor |
+| `.codex/config.toml` | memory server registered for Codex |
 | `AGENTS.md` | instruction block, delimited by markers |
 | `CLAUDE.md` | `@AGENTS.md` import wrapper (created if absent) |
 
