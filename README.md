@@ -86,17 +86,16 @@ The `memory` MCP lets multiple agents use one memory the same way. Items marked 
 
 ### Commands
 
-After the first install, use the project-local management script. Run each
-command as `./.agents/bin/agent-parity <command>` on Linux/macOS/WSL or
-`.\.agents\bin\agent-parity.cmd <command>` on Windows PowerShell. When you run
-the bootstrap script directly, `[dir]` defaults to the current directory.
+After the first install, run these from the project root. On Windows
+PowerShell, use `.\.agents\bin\agent-parity.cmd` in place of
+`./.agents/bin/agent-parity`.
 
 | Command | Description |
 | --- | --- |
-| `status` | Checks the project files and the locally available agent CLIs. |
-| `version` | Reports the installed and latest version. |
-| `update` | Re-applies everything at the latest release — binaries, launchers, registrations, skills wiring, Claude settings, and the marker blocks. |
-| `uninstall` | Removes the installed artifacts. Add `--purge` to delete the memory store as well. |
+| `./.agents/bin/agent-parity status` | Checks the project files and the locally available agent CLIs. |
+| `./.agents/bin/agent-parity version` | Reports the installed and latest version. |
+| `./.agents/bin/agent-parity update` | Re-applies everything at the latest release — binaries, launchers, registrations, skills wiring, Claude settings, and the marker blocks. |
+| `./.agents/bin/agent-parity uninstall` | Removes the installed artifacts. Add `--purge` to delete the memory store as well. |
 
 <details>
 <summary><code>status</code> output</summary>

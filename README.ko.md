@@ -73,14 +73,14 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 
 ### 관리 명령어
 
-첫 설치 후에는 프로젝트 로컬 관리 스크립트를 씁니다. 각 명령은 Linux/macOS/WSL에서 `./.agents/bin/agent-parity <명령>`, Windows PowerShell에서 `.\.agents\bin\agent-parity.cmd <명령>`으로 실행합니다. bootstrap 스크립트를 직접 실행할 때 `[dir]`을 생략하면 현재 디렉터리를 대상으로 합니다.
+첫 설치 후에는 프로젝트 루트에서 아래 명령을 실행합니다. Windows PowerShell에서는 `./.agents/bin/agent-parity` 대신 `.\.agents\bin\agent-parity.cmd`를 씁니다.
 
 | 명령 | 설명 |
 | --- | --- |
-| `status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
-| `version` | 설치된 버전과 최신 버전을 보고합니다. |
-| `update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 바이너리·런처·등록·스킬 배선·Claude 설정·마커 블록. |
-| `uninstall` | 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다. |
+| `./.agents/bin/agent-parity status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
+| `./.agents/bin/agent-parity version` | 설치된 버전과 최신 버전을 보고합니다. |
+| `./.agents/bin/agent-parity update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 바이너리·런처·등록·스킬 배선·Claude 설정·마커 블록. |
+| `./.agents/bin/agent-parity uninstall` | 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다. |
 
 <details>
 <summary><code>status</code> 출력 항목</summary>
