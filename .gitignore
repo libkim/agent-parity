@@ -1,3 +1,6 @@
 /dist/
 /memory/
 /.cache/
+# agent-parity:begin
+/.claude/
+# agent-parity:end

@@ -1,0 +1,14 @@
+[mcp_servers.memory]
+command = ".agents/mcp/memory/run.sh"
+
+[mcp_servers.memory.tools.memory_add]
+approval_mode = "approve"
+
+[mcp_servers.memory.tools.memory_recent]
+approval_mode = "approve"
+
+[mcp_servers.memory.tools.memory_search]
+approval_mode = "approve"
+
+[mcp_servers.memory.tools.memory_get]
+approval_mode = "approve"
