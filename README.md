@@ -44,10 +44,6 @@ the same skills and instructions (`AGENTS.md`).
 Run the install command below in your project's root, then restart your agent
 session.
 
-> **Note:** The memory store is plaintext in the repo, so a public repo exposes
-> it. agent-parity reminds agents to keep secrets out, but you're responsible
-> for what ends up stored.
-
 ### Install
 
 Linux/macOS/WSL:
@@ -61,6 +57,12 @@ Native Windows PowerShell:
 ```powershell
 irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 ```
+
+### Caution
+
+The memory store is plaintext in the repo, so a public repo exposes it.
+agent-parity reminds agents to keep secrets out, but you're responsible for what
+ends up stored.
 
 ### Adopting an existing setup
 

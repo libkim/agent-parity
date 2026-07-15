@@ -38,8 +38,6 @@
 
 프로젝트 루트에서 설치 명령을 실행한 뒤 에이전트 세션을 재시작하세요.
 
-> **참고:** 메모리 저장소는 저장소 안에 평문으로 들어가 공개 저장소면 노출됩니다. agent-parity가 에이전트에게 비밀 정보를 넣지 않도록 안내하지만, 저장되는 내용의 책임은 사용자에게 있습니다.
-
 ### 설치
 
 Linux/macOS/WSL:
@@ -53,6 +51,10 @@ Native Windows PowerShell:
 ```powershell
 irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 ```
+
+### 주의사항
+
+메모리 저장소는 저장소 안에 평문으로 들어가 공개 저장소면 노출됩니다. agent-parity가 에이전트에게 비밀 정보를 넣지 않도록 안내하지만, 저장되는 내용의 책임은 사용자에게 있습니다.
 
 ### 기존 설정이 있는 프로젝트에 도입하기
 
