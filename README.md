@@ -94,7 +94,7 @@ the bootstrap script directly, `[dir]` defaults to the current directory.
 | Command | Description |
 | --- | --- |
 | `status` | Checks the project files and the locally available agent CLIs. |
-| `version` | Reports the installed version — it stamps the whole environment and is carried by the memory server binary, which also answers `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`. |
+| `version` | Reports the installed and latest version. |
 | `update` | Re-applies everything at the latest release — binaries, launchers, registrations, skills wiring, Claude settings, and the marker blocks. |
 | `uninstall` | Removes the installed artifacts. Add `--purge` to delete the memory store as well. |
 

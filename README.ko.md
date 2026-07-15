@@ -78,7 +78,7 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 | 명령 | 설명 |
 | --- | --- |
 | `status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
-| `version` | 설치된 버전을 보고합니다 — 환경 전체의 버전이며 메모리 서버 바이너리에 새겨져 있고, 바이너리 자체는 `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`으로도 답합니다. |
+| `version` | 설치된 버전과 최신 버전을 보고합니다. |
 | `update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 바이너리·런처·등록·스킬 배선·Claude 설정·마커 블록. |
 | `uninstall` | 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다. |
 
