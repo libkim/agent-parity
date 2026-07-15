@@ -73,14 +73,16 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 
 ### 관리 명령어
 
-첫 설치 후에는 프로젝트 루트에서 아래 명령을 실행합니다. Windows PowerShell에서는 `./.agents/bin/agent-parity` 대신 `.\.agents\bin\agent-parity.cmd`를 씁니다.
+설치하면 `agent-parity` 스킬이 함께 깔려서, 어느 에이전트 안에서든 아래 명령을 실행할 수 있습니다 — 에이전트에게 실행을 요청하면(Claude Code에서는 `/agent-parity`) OS에 맞는 호출을 알아서 고릅니다.
 
 | 명령 | 설명 |
 | --- | --- |
-| `./.agents/bin/agent-parity status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
-| `./.agents/bin/agent-parity version` | 설치된 버전과 최신 버전을 보고합니다. |
-| `./.agents/bin/agent-parity update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 바이너리·런처·등록·스킬 배선·Claude 설정·마커 블록. |
-| `./.agents/bin/agent-parity uninstall` | 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다. |
+| `status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
+| `version` | 설치된 버전과 최신 버전을 보고합니다. |
+| `update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 바이너리·런처·등록·스킬 배선·Claude 설정·마커 블록. |
+| `uninstall` | 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다. |
+
+프로젝트 루트에서 직접 실행할 수도 있습니다: Linux/macOS/WSL은 `./.agents/bin/agent-parity <명령>`, Windows PowerShell은 `.\.agents\bin\agent-parity.cmd <명령>`.
 
 <details>
 <summary><code>status</code> 출력 항목</summary>
@@ -124,7 +126,7 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 
 설치되는 파일은 모두 저장소에 커밋합니다. 첫 머신에서 `install`을 한 번 실행하면 바이너리와 배선이 저장소에 담기고(vendoring), 그 뒤로 pull하는 다른 머신은 다시 설치할 필요가 없습니다. `.claude/`는 세션마다 `.agents/`에서 다시 생성되므로 git에서 뺍니다. `.gitignore`가 이 파일들을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
 
-agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 에이전트 설정과 Claude 설정에는 자기 항목만 병합하므로, 그 안의 다른 설정과 사용자가 다른 서버로 바꿔 둔 `memory` 항목은 보존됩니다. `AGENTS.md`·`.gitignore`의 마커 블록과 생성 shim(런처, 동기화 스크립트, 관리 명령)은 `update`가 최신 상태로 다시 만드니 그 사본은 직접 고치지 마세요. `uninstall`은 자신이 넣은 것을 제거합니다. 메모리 저장소와 `.agents/skills/`의 스킬은 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 에이전트별 폴더(`.claude`·`.codex`·`.cursor`의 `skills/`)에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 합니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
+agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 에이전트 설정과 Claude 설정에는 자기 항목만 병합하므로, 그 안의 다른 설정과 사용자가 다른 서버로 바꿔 둔 `memory` 항목은 보존됩니다. `AGENTS.md`·`.gitignore`의 마커 블록과 생성 shim(런처, 동기화 스크립트, 관리 명령, `agent-parity` 스킬)은 `update`가 최신 상태로 다시 만드니 그 사본은 직접 고치지 마세요. `uninstall`은 자신이 넣은 것을 제거합니다. 메모리 저장소와 `.agents/skills/`의 사용자 스킬은 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 에이전트별 폴더(`.claude`·`.codex`·`.cursor`의 `skills/`)에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 합니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
 
 ### 메모리
 
@@ -142,6 +144,7 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 | `.agents/bin/` | 프로젝트 로컬 관리 명령(`agent-parity`, `.cmd`, `.ps1`) |
 | `.agents/memory/` | 메모리 저장소 — 메모리 하나가 마크다운 파일 하나 |
 | `.agents/skills/` | 공유 스킬 원본 (사용자가 채우는 곳) |
+| `.agents/skills/agent-parity/` | 어느 에이전트에서든 관리 명령을 실행하는 관리 스킬 |
 | `.agents/scripts/sync-claude.{sh,ps1}` | 스킬을 `.claude`로 미러링하는 동기화 스크립트. 설치한 OS의 것만 생성됩니다(Unix는 `.sh`, Windows는 `.ps1`). |
 | `.agents/claude/settings.json` | 동기화 훅이 담긴 Claude 설정 원본 (OS별 내용) |
 | `.agents/mcp_config.json` | Antigravity CLI에 메모리 서버 등록 |

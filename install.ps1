@@ -332,8 +332,13 @@ function Sync-GitIgnore {
       if (Test-Path -LiteralPath (Path-InTarget $p) -PathType Container) { $rules.Add("!/$p/") } else { $rules.Add("!/$p") }
     }
   }
-  if ((Test-Path -LiteralPath (Path-InTarget $SyncScript)) -and !(Test-Ignored ".claude")) {
-    $rules.Add("/.claude/")
+  # Keep .claude/settings.json tracked so a fresh pull already carries the hook
+  # and self-syncs (no manual first-run bootstrap); ignore the generated copies.
+  # Git can't re-include under a fully ignored dir, so ignore .claude/* and
+  # un-ignore settings.json.
+  if ((Test-Path -LiteralPath (Path-InTarget $SyncScript)) -and !(Test-Ignored ".claude/skills")) {
+    $rules.Add("/.claude/*")
+    $rules.Add("!/.claude/settings.json")
   }
   if ($rules.Count -eq 0) { return }
   $gi = Path-InTarget ".gitignore"
@@ -371,6 +376,13 @@ function Install-Skills {
   Write-Output "skills:"
   New-Item -ItemType Directory -Force -Path (Path-InTarget ".agents/skills") | Out-Null
   Adopt-AgentSkills
+  # The agent-parity skill lets any agent run the management commands without the
+  # user typing OS-specific paths. It is a generated shim we own outright (like
+  # run.cmd), so overwrite it every run to keep it current.
+  $msk = Path-InTarget ".agents/skills/agent-parity"
+  New-Item -ItemType Directory -Force -Path $msk | Out-Null
+  Write-Text (Join-Path $msk "SKILL.md") ((Fetch-Text "templates/agent-parity.skill.md").TrimEnd("`r", "`n") + "`n")
+  Write-Output "  wrote:      .agents/skills/agent-parity/SKILL.md"
   if (!(Get-ChildItem -LiteralPath (Path-InTarget ".agents/skills") -Force | Select-Object -First 1)) {
     Write-Text (Path-InTarget ".agents/skills/.gitkeep") ""
   }
@@ -413,6 +425,10 @@ function Uninstall-Skills {
     if (Test-Path -LiteralPath $full) { Invoke-MemoryBin "-unmerge-claude-settings" $full | Out-Null }
   }
   Remove-Item -LiteralPath $s -Force
+  # The agent-parity skill is our wiring, not a user skill: remove both the
+  # source and Claude's synced copy so no dangling copy survives uninstall.
+  Remove-Item -LiteralPath (Path-InTarget ".agents/skills/agent-parity") -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath (Path-InTarget ".claude/skills/agent-parity") -Recurse -Force -ErrorAction SilentlyContinue
   Write-Output "skills: removed sync wiring"
 }
 
@@ -432,9 +448,14 @@ function Status-Skills {
   $skillDir = Path-InTarget ".agents/skills"
   $n = 0
   if (Test-Path -LiteralPath $skillDir) {
-    $n = @(Get-ChildItem -LiteralPath $skillDir -Directory).Count
+    $n = @(Get-ChildItem -LiteralPath $skillDir -Directory | Where-Object { $_.Name -ne "agent-parity" }).Count
   }
   Write-Output "skills: $n in .agents/skills; sync script present"
+  if (Test-Path -LiteralPath (Join-Path $skillDir "agent-parity/SKILL.md")) {
+    Write-Output "  management skill: present"
+  } else {
+    Write-Output "  management skill: missing"
+  }
   $src = Read-Text (Path-InTarget $ClaudeSrc)
   $tgt = Read-Text (Path-InTarget $ClaudeTgt)
   if ($src -and $src.Contains("sync-claude.ps1")) { Write-Output "  hook: registered ($ClaudeSrc)" }

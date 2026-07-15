@@ -263,10 +263,14 @@ sync_gitignore() {
 "; else rules="$rules!/$p
 "; fi
   done
-  # .claude is regenerated from .agents each session; keep it out of git so
-  # the generated copy never competes with its source.
-  if [ -e "$TARGET/$SYNC_SCRIPT" ] && ! git -C "$TARGET" check-ignore -q -- .claude 2>/dev/null; then
-    rules="$rules/.claude/
+  # .claude is regenerated from .agents each session. Keep settings.json tracked
+  # so a fresh pull already carries the SessionStart hook and self-syncs with no
+  # manual first-run bootstrap; ignore the rest (skills copy, machine-local
+  # settings, runtime files). Git can't re-include a file under a fully ignored
+  # directory, so ignore .claude/* and un-ignore settings.json.
+  if [ -e "$TARGET/$SYNC_SCRIPT" ] && ! git -C "$TARGET" check-ignore -q -- .claude/skills 2>/dev/null; then
+    rules="$rules/.claude/*
+!/.claude/settings.json
 "
   fi
   [ -n "$rules" ] || return 0
@@ -312,6 +316,13 @@ install_skills() {
   echo "skills:"
   mkdir -p "$TARGET/.agents/skills"
   adopt_agent_skills
+  # The agent-parity skill lets any agent run the management commands without the
+  # user typing OS-specific paths. It is a generated shim we own outright (like
+  # run.sh), so overwrite it every run to keep it current.
+  msk="$TARGET/.agents/skills/agent-parity"
+  mkdir -p "$msk"
+  fetch templates/agent-parity.skill.md > "$msk/SKILL.md"
+  echo "  wrote:      .agents/skills/agent-parity/SKILL.md"
   [ -n "$(ls -A "$TARGET/.agents/skills" 2>/dev/null)" ] || : > "$TARGET/.agents/skills/.gitkeep"
   # sync-claude.sh is a generated shim we own outright (like run.sh), so
   # overwrite it every run to keep it current — user skills live in
@@ -346,6 +357,10 @@ uninstall_skills() {
     echo "skills: $SYNC_SCRIPT differs from the packaged one — wiring left alone"
     return 0
   fi
+  # The agent-parity skill is our wiring, not a user skill, so remove both the
+  # source and Claude's synced copy before deciding whether a static copy of
+  # real user skills is worth keeping below.
+  rm -rf "$TARGET/.agents/skills/agent-parity" "$TARGET/.claude/skills/agent-parity"
   if [ -n "$(ls -A "$TARGET/.claude/skills" 2>/dev/null | grep -v '^\.gitkeep$')" ]; then
     # Claude Code reads only this copy, so removing it with the wiring would
     # take Claude's skills away while every other agent keeps the source.
@@ -361,7 +376,7 @@ uninstall_skills() {
   rm "$s"
   rmdir "$TARGET/.agents/claude" "$TARGET/.agents/scripts" "$TARGET/.claude" 2>/dev/null || true
   echo "skills: removed sync wiring"
-  if [ "$(ls -A "$TARGET/.agents/skills" 2>/dev/null)" = ".gitkeep" ]; then
+  if [ -z "$(ls -A "$TARGET/.agents/skills" 2>/dev/null | grep -v '^\.gitkeep$')" ]; then
     rm -rf "$TARGET/.agents/skills"
     echo "skills: removed empty .agents/skills"
   else
@@ -385,8 +400,13 @@ status_skills() {
     echo "skills: sync wiring missing"
     return 0
   fi
-  n=$(ls "$TARGET/.agents/skills" 2>/dev/null | grep -cv '^\.gitkeep$' || true)
+  n=$(ls "$TARGET/.agents/skills" 2>/dev/null | grep -cvE '^(\.gitkeep|agent-parity)$' || true)
   echo "skills: $n in .agents/skills; sync script present"
+  if [ -e "$TARGET/.agents/skills/agent-parity/SKILL.md" ]; then
+    echo "  management skill: present"
+  else
+    echo "  management skill: missing"
+  fi
   if grep -q "sync-claude.sh" "$TARGET/$CLAUDE_SRC" 2>/dev/null; then
     echo "  hook: registered ($CLAUDE_SRC)"
   elif grep -q "sync-claude.sh" "$TARGET/$CLAUDE_TGT" 2>/dev/null; then
