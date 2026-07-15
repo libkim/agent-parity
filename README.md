@@ -164,6 +164,10 @@ Each memory is a markdown file with `created`, `tags`, `strength`, and
 often-recalled memories keep ranking high while long-unused ones fall in the
 results.
 
+The store is plaintext committed to the repo, so anyone who can read the repo
+can read your memories — don't put secrets in them, and note that a public repo
+exposes them to everyone.
+
 ### Skills
 
 Drop standard Agent Skills (`<name>/SKILL.md`) into `.agents/skills/`. Codex,

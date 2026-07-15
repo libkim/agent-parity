@@ -126,6 +126,8 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 
 각 메모리는 `created`, `tags`, `strength`, `lastAccessed` 프론트매터를 가진 마크다운 파일입니다. `memory_search`는 `일치 × exp(-경과일 / strength)`로 점수를 매기고, 회상할 때 `strength`를 올립니다. 그래서 자주 회상되는 메모리는 검색 상위에 오래 남고, 오래 안 쓴 메모리는 점수가 낮아져 검색에서 밀립니다.
 
+메모리 저장소는 평문으로 저장소에 커밋되므로, 저장소를 읽을 수 있는 사람은 누구나 메모리를 읽을 수 있습니다. 비밀 정보는 넣지 말고, 공개 저장소면 모두에게 노출된다는 점에 유의하세요.
+
 ### 스킬
 
 표준 Agent Skills(`<name>/SKILL.md`)를 `.agents/skills/`에 넣습니다. Codex, Cursor, Antigravity CLI는 거기서 바로 불러옵니다. Claude Code는 설치된 SessionStart 훅이 플랫폼 동기화 스크립트(Unix는 `sync-claude.sh`, native Windows는 `sync-claude.ps1`)를 실행해 세션이 시작될 때마다 `.agents/` 원본에서 `.claude/skills`와 `.claude/settings.json`을 다시 만듭니다. 수정은 원본에만 하고, 생성된 사본은 언제든 버려도 됩니다. `.claude/settings.local.json`은 절대 건드리지 않으므로 머신 로컬 설정은 로컬에 남습니다.
