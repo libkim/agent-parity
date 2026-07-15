@@ -45,8 +45,8 @@ Run the install command below in your project's root, then restart your agent
 session.
 
 > **Note:** The memory store is plaintext in the repo, so a public repo exposes
-> it. agent-parity nudges agents to keep secrets out, but that is best-effort —
-> you're responsible for what ends up stored.
+> it. agent-parity reminds agents to keep secrets out, but you're responsible
+> for what ends up stored.
 
 ### Install
 
