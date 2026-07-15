@@ -44,6 +44,10 @@ the same skills and instructions (`AGENTS.md`).
 Run the install command below in your project's root, then restart your agent
 session.
 
+> **Note:** The memory store is plaintext in the repo, so a public repo exposes
+> it. agent-parity nudges agents to keep secrets out, but that is best-effort —
+> you're responsible for what ends up stored.
+
 ### Install
 
 Linux/macOS/WSL:
@@ -163,10 +167,6 @@ Each memory is a markdown file with `created`, `tags`, `strength`, and
 `match × exp(-ageDays / strength)` and bumps `strength` on recall, so
 often-recalled memories keep ranking high while long-unused ones fall in the
 results.
-
-The store is plaintext committed to the repo, so anyone who can read the repo
-can read your memories — don't put secrets in them, and note that a public repo
-exposes them to everyone.
 
 ### Skills
 
