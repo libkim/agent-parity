@@ -171,11 +171,12 @@ func main() {
 			"At the start of a session, call memory_recent to load prior context before acting. " +
 			"When the user reveals an intent, decision, or preference worth keeping — and when a task reaches a checkpoint or finishes — call memory_add with the fact and its reason. " +
 			"When a past topic or decision becomes relevant, call memory_search before acting. " +
-			"Store durable context, not secrets, one-off chatter, or facts another source already enforces.",
+			"Store durable context, not secrets, one-off chatter, or facts another source already enforces. " +
+			"Memories are saved as plaintext and committed to the repo, which may be shared or public, so never store credentials, tokens, keys, or other sensitive data.",
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_add",
-		Description: "Store a durable memory (an intent, decision, preference, or outcome and its reason). Call this when the user reveals something worth keeping, and when a task reaches a checkpoint or finishes. Not for secrets or one-off chatter.",
+		Description: "Store a durable memory (an intent, decision, preference, or outcome and its reason). Call this when the user reveals something worth keeping, and when a task reaches a checkpoint or finishes. Not for one-off chatter. Never store secrets: memories are plaintext committed to the repo (possibly shared or public), so keep out credentials, tokens, keys, and sensitive personal data.",
 	}, addHandler)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_search",
