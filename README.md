@@ -17,7 +17,6 @@ the same skills and instructions (`AGENTS.md`).
 
 - **Dependency-free** — runs as a single static binary; no Go, Node, or other runtime to install.
 - **Non-invasive** — creates only project-scoped files (committed to the repo); never touches global settings.
-- **Non-destructive** — merges into your existing files without overwriting them, coexisting with what's already there.
 - **Zero-install** — commit it once and any machine that pulls the repo uses it right away, no reinstall.
 
 ## Supported agents (tested 2026-07-10)
@@ -53,11 +52,13 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 Installing on a project that already runs a memory server, shared skills, or its
 own instructions leaves your existing files in place and guesses nothing:
 
-- A config with other MCP servers gets the memory entry merged in, the rest
-  preserved. One that already has a `memory` entry pointing at a different
-  server is reported with the replacement snippet; that entry is yours to swap.
-- An existing sync script and hook are kept as they are; existing
-  `.claude/skills` are adopted into `.agents/skills/`.
+- A config that already lists other MCP servers gets agent-parity's
+  memory-server entry added and the rest preserved. If a `memory` entry already
+  exists but points at a different server, it is reported with a replacement
+  snippet instead of overwritten — that entry is yours to swap.
+- Any agent skills already in the project (`.claude`, `.codex`, or `.cursor`
+  `skills/`) are moved into the shared `.agents/skills/` automatically, so you
+  don't have to do anything.
 - An `AGENTS.md` that already covers the memory tools gets a duplication note
   when the block is appended, so you can fold the overlap yourself.
 
@@ -79,12 +80,12 @@ command as `./.agents/bin/agent-parity <command>` on Linux/macOS/WSL or
 `.\.agents\bin\agent-parity.cmd <command>` on Windows PowerShell. When you run
 the bootstrap script directly, `[dir]` defaults to the current directory.
 
-- `status` — checks the project files and the locally available agent CLIs.
-- `version` — reports the installed server binary's version. The binary itself
-  also answers `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`.
-- `update` — replaces the binaries and wiring files with the latest release.
-- `uninstall` — removes the installed artifacts. Add `--purge` to delete the
-  memory store as well.
+| Command | Description |
+| --- | --- |
+| `status` | Checks the project files and the locally available agent CLIs. |
+| `version` | Reports the installed server binary's version. The binary itself also answers `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`. |
+| `update` | Replaces the binaries and wiring files with the latest release. |
+| `uninstall` | Removes the installed artifacts. Add `--purge` to delete the memory store as well. |
 
 <details>
 <summary><code>status</code> output</summary>
@@ -135,10 +136,11 @@ What the tool writes (agent configs, the marker blocks in `AGENTS.md` and
 `.gitignore`, the wiring files) is rewritten by `update` and removed by
 `uninstall` — but once you edit any of it, it is left alone from then on. Your
 memory store and the skills in `.agents/skills/` are yours: never modified or
-deleted (`--purge` deletes the store on request). Pre-existing Claude-only
-`.claude/skills` are moved into `.agents/skills/` at install so every agent
-shares them, and a copy is left after `uninstall` so Claude keeps its skills
-without the sync.
+deleted (`--purge` deletes the store on request). Skills already sitting in a
+per-agent folder (`.claude`, `.codex`, or `.cursor` `skills/`) are moved into
+the shared `.agents/skills/` at install so every agent shares them; after
+`uninstall`, a `.claude/skills` copy is left so Claude — which can't read the
+shared folder — keeps its skills without the sync.
 
 ### Memory
 

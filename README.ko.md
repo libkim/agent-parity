@@ -12,7 +12,6 @@
 
 - **의존성 없음** — 정적 바이너리 하나로 돌아가며, Go·Node 같은 런타임을 설치할 필요가 없습니다.
 - **비침습** — 저장소에 커밋되는 프로젝트 스코프 파일만 만들고, 전역 설정은 건드리지 않습니다.
-- **비파괴적** — 기존 파일을 덮어쓰지 않고 필요한 항목만 병합해, 이미 있는 설정과 함께 놓입니다.
 - **무설치** — 한 번 커밋해 두면 저장소를 받은 다른 머신은 다시 설치하지 않고 바로 씁니다.
 
 ## 지원 에이전트 (2026-07-10 검증 기준)
@@ -46,8 +45,8 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 
 이미 메모리 서버, 공유 스킬, 자체 지침을 운영 중인 프로젝트에 설치해도 기존 것을 덮어쓰지 않고, 아무것도 추측하지 않습니다.
 
-- 다른 MCP 서버가 있는 설정에는 memory 항목을 병합하고 나머지는 보존합니다. 이미 다른 서버를 가리키는 `memory` 항목이 있으면 교체 스니펫과 함께 보고하며, 그 항목의 교체는 사용자가 합니다.
-- 기존 동기화 스크립트와 훅은 그대로 두고, 기존 `.claude/skills`는 `.agents/skills/`로 승격합니다.
+- 다른 MCP 서버가 이미 등록된 설정에는 agent-parity의 메모리 서버 항목만 추가하고 나머지는 그대로 둡니다. 이미 `memory`라는 이름의 항목이 다른 서버를 가리키고 있으면 덮어쓰지 않고 교체용 스니펫만 알려 주며, 그 항목의 교체는 사용자가 합니다.
+- 프로젝트에 이미 있던 에이전트 스킬(`.claude`·`.codex`·`.cursor`의 `skills/`)은 공유 폴더 `.agents/skills/`로 자동으로 옮겨지니 별도 작업이 필요 없습니다.
 - 이미 메모리 도구를 다루는 `AGENTS.md`에는 블록을 덧붙일 때 중복 검토 안내를 출력합니다. 겹치는 부분은 사용자가 직접 합칩니다.
 
 ### 승인
@@ -65,10 +64,12 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 
 첫 설치 후에는 프로젝트 로컬 관리 스크립트를 씁니다. 각 명령은 Linux/macOS/WSL에서 `./.agents/bin/agent-parity <명령>`, Windows PowerShell에서 `.\.agents\bin\agent-parity.cmd <명령>`으로 실행합니다. bootstrap 스크립트를 직접 실행할 때 `[dir]`을 생략하면 현재 디렉터리를 대상으로 합니다.
 
-- `status` — 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다.
-- `version` — 설치된 서버 바이너리의 버전을 보고합니다. 바이너리 자체는 `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`으로도 답합니다.
-- `update` — 바이너리와 배선 파일을 최신 릴리스로 교체합니다.
-- `uninstall` — 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다.
+| 명령 | 설명 |
+| --- | --- |
+| `status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
+| `version` | 설치된 서버 바이너리의 버전을 보고합니다. 바이너리 자체는 `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`으로도 답합니다. |
+| `update` | 바이너리와 배선 파일을 최신 릴리스로 교체합니다. |
+| `uninstall` | 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다. |
 
 <details>
 <summary><code>status</code> 출력 항목</summary>
@@ -108,7 +109,7 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 
 설치되는 파일은 모두 저장소에 커밋합니다. 첫 머신에서 `install`을 한 번 실행하면 바이너리와 배선이 저장소에 담기고(vendoring), 그 뒤로 pull하는 다른 머신은 다시 설치할 필요가 없습니다. `.claude/`는 세션마다 `.agents/`에서 다시 생성되므로 git에서 뺍니다. `.gitignore`가 이 파일들을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
 
-도구가 넣은 부분(에이전트 설정, `AGENTS.md`·`.gitignore`의 마커 블록, 배선 파일)은 `update`가 다시 쓰고 `uninstall`이 지웁니다 — 단, 네가 한 번이라도 손대면 그 뒤로는 건드리지 않습니다. 반면 메모리 저장소와 `.agents/skills/`의 스킬은 네 것이라 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 Claude 전용으로 있던 `.claude/skills`는 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 하고, `uninstall` 후에도 그 사본은 남겨 동기화 없이 스킬이 유지됩니다.
+도구가 넣은 부분(에이전트 설정, `AGENTS.md`·`.gitignore`의 마커 블록, 배선 파일)은 `update`가 다시 쓰고 `uninstall`이 지웁니다 — 단, 네가 한 번이라도 손대면 그 뒤로는 건드리지 않습니다. 반면 메모리 저장소와 `.agents/skills/`의 스킬은 네 것이라 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 에이전트별 폴더(`.claude`·`.codex`·`.cursor`의 `skills/`)에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 합니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
 
 ### 메모리
 
