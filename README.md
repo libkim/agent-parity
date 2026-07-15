@@ -19,7 +19,7 @@ the same skills and instructions (`AGENTS.md`).
 ## Features
 
 - **Dependency-free** — runs as a single static binary; no Go, Node, or other runtime to install.
-- **Non-invasive** — creates only project-scoped files (committed to the repo); never touches global settings.
+- **Non-invasive** — creates only project-scoped files; never touches global settings.
 - **Zero-install** — commit it once and any machine that pulls the repo uses it right away, no reinstall.
 
 ## Supported agents (tested 2026-07-10)
@@ -94,7 +94,7 @@ the bootstrap script directly, `[dir]` defaults to the current directory.
 | Command | Description |
 | --- | --- |
 | `status` | Checks the project files and the locally available agent CLIs. |
-| `version` | Reports the installed version (it stamps the whole environment and is carried by the memory server binary, which also answers `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`). |
+| `version` | Reports the installed version — it stamps the whole environment and is carried by the memory server binary, which also answers `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`. |
 | `update` | Re-applies everything at the latest release — binaries, launchers, registrations, skills wiring, Claude settings, and the marker blocks. |
 | `uninstall` | Removes the installed artifacts. Add `--purge` to delete the memory store as well. |
 
@@ -197,7 +197,7 @@ local.
 | `.cursor/cli.json` | memory-tool auto-approval allowlist for Cursor |
 | `.codex/config.toml` | memory server registered for Codex |
 | `AGENTS.md` | instruction block, delimited by markers |
-| `CLAUDE.md` | `@AGENTS.md` import wrapper (created if absent) |
+| `CLAUDE.md` | `@AGENTS.md` import wrapper |
 
 ## License
 

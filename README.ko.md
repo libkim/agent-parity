@@ -14,7 +14,7 @@
 ## 특징
 
 - **의존성 없음** — 정적 바이너리 하나로 돌아가며, Go·Node 같은 런타임을 설치할 필요가 없습니다.
-- **비침습** — 저장소에 커밋되는 프로젝트 스코프 파일만 만들고, 전역 설정은 건드리지 않습니다.
+- **비침습** — 프로젝트 스코프 파일만 만들고, 전역 설정은 건드리지 않습니다.
 - **무설치** — 한 번 커밋해 두면 저장소를 받은 다른 머신은 다시 설치하지 않고 바로 씁니다.
 
 ## 지원 에이전트 (2026-07-10 검증 기준)
@@ -78,7 +78,7 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 | 명령 | 설명 |
 | --- | --- |
 | `status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
-| `version` | 설치된 버전을 보고합니다(환경 전체의 버전이며 메모리 서버 바이너리에 새겨져 있고, 바이너리 자체는 `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`으로도 답합니다). |
+| `version` | 설치된 버전을 보고합니다 — 환경 전체의 버전이며 메모리 서버 바이너리에 새겨져 있고, 바이너리 자체는 `.agents/mcp/memory/dist/memory-mcp-<os>-<arch> -version`으로도 답합니다. |
 | `update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 바이너리·런처·등록·스킬 배선·Claude 설정·마커 블록. |
 | `uninstall` | 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다. |
 
@@ -150,7 +150,7 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 | `.cursor/cli.json` | Cursor용 메모리 도구 자동 승인 허용목록 |
 | `.codex/config.toml` | Codex에 메모리 서버 등록 |
 | `AGENTS.md` | 마커로 구분된 지침 블록 |
-| `CLAUDE.md` | `@AGENTS.md` 임포트 래퍼 (없을 때만 생성) |
+| `CLAUDE.md` | `@AGENTS.md` 임포트 래퍼 |
 
 ## 라이선스
 
