@@ -58,12 +58,6 @@ Native Windows PowerShell:
 irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 ```
 
-### Caution
-
-The memory store is plaintext in the repo, so a public repo exposes it.
-agent-parity reminds agents to keep secrets out, but you're responsible for what
-ends up stored.
-
 ### Adopting an existing setup
 
 Installing on a project that already runs a memory server, shared skills, or its
@@ -138,6 +132,12 @@ whether that session currently exposes the memory tools.
 | `parity` | `<file> exists ...` | An agent-specific instruction file would make agent behavior diverge; merge its content into `AGENTS.md`. |
 
 </details>
+
+### Caution
+
+The memory store is plaintext in the repo, so a public repo exposes it.
+agent-parity reminds agents to keep secrets out, but you're responsible for what
+ends up stored.
 
 ## How it works
 

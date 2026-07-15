@@ -52,10 +52,6 @@ Native Windows PowerShell:
 irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 ```
 
-### 주의사항
-
-메모리 저장소는 저장소 안에 평문으로 들어가 공개 저장소면 노출됩니다. agent-parity가 에이전트에게 비밀 정보를 넣지 않도록 안내하지만, 저장되는 내용의 책임은 사용자에게 있습니다.
-
 ### 기존 설정이 있는 프로젝트에 도입하기
 
 이미 메모리 서버, 공유 스킬, 자체 지침을 운영 중인 프로젝트에 설치해도 기존 것을 덮어쓰지 않고, 임의로 판단하지 않습니다.
@@ -119,6 +115,10 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 | `parity` | `<파일> exists ...` | 에이전트별 지침 파일이 동작을 갈라놓습니다. 내용을 `AGENTS.md`로 합쳐 주세요. |
 
 </details>
+
+### 주의사항
+
+메모리 저장소는 저장소 안에 평문으로 들어가 공개 저장소면 노출됩니다. agent-parity가 에이전트에게 비밀 정보를 넣지 않도록 안내하지만, 저장되는 내용의 책임은 사용자에게 있습니다.
 
 ## 동작 방식
 
