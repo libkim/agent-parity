@@ -27,6 +27,9 @@ $SyncScript = ".agents/scripts/sync-claude.ps1"
 $CursorCli = ".cursor/cli.json"
 $ClaudeSrc = ".agents/claude/settings.json"
 $ClaudeTgt = ".claude/settings.json"
+# SessionStart command merged into the settings; $env:CLAUDE_PROJECT_DIR stays
+# literal for Claude to expand, so keep this single-quoted.
+$ClaudeHook = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "& \"$env:CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.ps1\" sync"'
 $MarkBegin = "<!-- agent-parity:begin -->"
 $MarkEnd = "<!-- agent-parity:end -->"
 $GitIgnoreBegin = "# agent-parity:begin"
@@ -185,6 +188,18 @@ function Latest-Version {
   return "unknown"
 }
 
+# Pin scripts, templates, and binaries to the latest release tag so the whole
+# environment installs and updates as one version, not a mix of rolling main
+# and a released binary. Falls back to main when no release is found or when
+# AGENT_PARITY_RAW / AGENT_PARITY_RELEASE are set for development.
+if ((-not $env:AGENT_PARITY_RAW) -or (-not $env:AGENT_PARITY_RELEASE)) {
+  $pinnedTag = Latest-Version
+  if ($pinnedTag -match '^v') {
+    if (-not $env:AGENT_PARITY_RAW)     { $Raw = "https://raw.githubusercontent.com/$Repo/$pinnedTag" }
+    if (-not $env:AGENT_PARITY_RELEASE) { $Release = "https://github.com/$Repo/releases/download/$pinnedTag" }
+  }
+}
+
 function Compare-SemVer([string]$A, [string]$B) {
   $aa = $A.TrimStart('v') -split '\.'
   $bb = $B.TrimStart('v') -split '\.'
@@ -331,20 +346,23 @@ function Sync-GitIgnore {
   $rules | ForEach-Object { Write-Output "  $_" }
 }
 
-function Adopt-ClaudeSkills {
-  $claudeSkills = Path-InTarget ".claude/skills"
-  if (!(Test-Path -LiteralPath $claudeSkills -PathType Container)) { return }
+function Adopt-AgentSkills {
   New-Item -ItemType Directory -Force -Path (Path-InTarget ".agents/skills") | Out-Null
-  Get-ChildItem -LiteralPath $claudeSkills -Directory | ForEach-Object {
-    $name = $_.Name
-    $dest = Path-InTarget ".agents/skills/$name"
-    if (!(Test-Path -LiteralPath $dest)) {
-      Move-Item -LiteralPath $_.FullName -Destination $dest
-      Write-Output "  adopted:    .claude/skills/$name -> .agents/skills/$name (now shared by all agents)"
-    } else {
-      $conflict = Path-InTarget ".agents/skills/$name.from-claude"
-      Move-Item -LiteralPath $_.FullName -Destination $conflict -Force
-      Write-Output "  conflict:   .claude/skills/$name saved as .agents/skills/$name.from-claude, merge manually"
+  foreach ($pair in @(@(".claude/skills", "claude"), @(".codex/skills", "codex"), @(".cursor/skills", "cursor"))) {
+    $dir = $pair[0]; $label = $pair[1]
+    $src = Path-InTarget $dir
+    if (!(Test-Path -LiteralPath $src -PathType Container)) { continue }
+    Get-ChildItem -LiteralPath $src -Directory | ForEach-Object {
+      $name = $_.Name
+      $dest = Path-InTarget ".agents/skills/$name"
+      if (!(Test-Path -LiteralPath $dest)) {
+        Move-Item -LiteralPath $_.FullName -Destination $dest
+        Write-Output "  adopted:    $dir/$name -> .agents/skills/$name (now shared by all agents)"
+      } else {
+        $conflict = Path-InTarget ".agents/skills/$name.from-$label"
+        Move-Item -LiteralPath $_.FullName -Destination $conflict -Force
+        Write-Output "  conflict:   $dir/$name saved as .agents/skills/$name.from-$label, merge manually"
+      }
     }
   }
 }
@@ -352,34 +370,30 @@ function Adopt-ClaudeSkills {
 function Install-Skills {
   Write-Output "skills:"
   New-Item -ItemType Directory -Force -Path (Path-InTarget ".agents/skills") | Out-Null
-  Adopt-ClaudeSkills
+  Adopt-AgentSkills
   if (!(Get-ChildItem -LiteralPath (Path-InTarget ".agents/skills") -Force | Select-Object -First 1)) {
     Write-Text (Path-InTarget ".agents/skills/.gitkeep") ""
   }
+  # sync-claude.ps1 is a generated shim we own outright (like run.cmd), so
+  # overwrite it every run to keep it current — user skills live in
+  # .agents/skills, never here.
   $s = Path-InTarget $SyncScript
-  if (!(Test-Path -LiteralPath $s)) {
-    Write-Text $s ((Fetch-Text "templates/sync-claude.ps1").TrimEnd("`r", "`n") + "`n")
-    Write-Output "  wrote:      $SyncScript"
-  } else {
-    Write-Output "  exists:     $SyncScript (kept as is)"
-  }
-  $hook = (Fetch-Text "templates/claude.settings.windows.json").TrimEnd("`r", "`n")
+  Write-Text $s ((Fetch-Text "templates/sync-claude.ps1").TrimEnd("`r", "`n") + "`n")
+  Write-Output "  wrote:      $SyncScript"
+  # Merge our keys into the settings source, preserving any the user set. If only
+  # the generated .claude copy exists, seed the source from it first so nothing
+  # there is lost when sync regenerates the copy.
   $src = Path-InTarget $ClaudeSrc
   $tgt = Path-InTarget $ClaudeTgt
-  $srcText = Read-Text $src
-  if ($null -ne $srcText) {
-    if ($srcText.Contains("sync-claude.ps1")) {
-      Write-Output "  registered: $ClaudeSrc (hook already)"
-    } else {
-      Write-Output "  exists:     $ClaudeSrc -- merge this hook in:"
-      $hook -split "`n" | ForEach-Object { Write-Output "    | $_" }
-    }
-  } elseif (Test-Path -LiteralPath $tgt) {
-    Write-Output "  exists:     $ClaudeTgt -- move it to $ClaudeSrc and merge this hook in:"
-    $hook -split "`n" | ForEach-Object { Write-Output "    | $_" }
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $src) | Out-Null
+  if (!(Test-Path -LiteralPath $src) -and (Test-Path -LiteralPath $tgt)) {
+    Copy-Item -LiteralPath $tgt -Destination $src -Force
+    Write-Output "  migrated:   $ClaudeTgt -> $ClaudeSrc"
+  }
+  if ((Invoke-MemoryBin "-merge-claude-settings" $src "-hook-command" $ClaudeHook) -eq 0) {
+    Write-Output "  merged:     $ClaudeSrc (memory keys + sync hook)"
   } else {
-    Write-Text $src ($hook + "`n")
-    Write-Output "  wrote:      $ClaudeSrc"
+    Write-Output "  warn:       could not merge $ClaudeSrc"
   }
   & powershell -NoProfile -ExecutionPolicy Bypass -File $s sync 2>&1 | ForEach-Object { Write-Output "  $_" }
 }
@@ -393,11 +407,11 @@ function Uninstall-Skills {
     Write-Output "skills: $SyncScript differs from the packaged one -- wiring left alone"
     return
   }
-  $hook = (Fetch-Text "templates/claude.settings.windows.json").TrimEnd("`r", "`n")
-  $src = Path-InTarget $ClaudeSrc
-  $tgt = Path-InTarget $ClaudeTgt
-  if ((Read-Text $tgt) -and ((Read-Text $tgt).TrimEnd("`r", "`n") -eq $hook)) { Remove-Item -LiteralPath $tgt -Force }
-  if ((Read-Text $src) -and ((Read-Text $src).TrimEnd("`r", "`n") -eq $hook)) { Remove-Item -LiteralPath $src -Force }
+  # Strip our keys from the settings; the binary deletes a file left with nothing else.
+  foreach ($f in @($ClaudeTgt, $ClaudeSrc)) {
+    $full = Path-InTarget $f
+    if (Test-Path -LiteralPath $full) { Invoke-MemoryBin "-unmerge-claude-settings" $full | Out-Null }
+  }
   Remove-Item -LiteralPath $s -Force
   Write-Output "skills: removed sync wiring"
 }
@@ -497,10 +511,9 @@ function Cmd-Update {
   Write-Output "configs:"
   For-EachConfig "Reg-Config"
   Reg-CursorCli
+  Install-Skills
   Sync-AgentsBlock
   Sync-GitIgnore
-  $s = Path-InTarget $SyncScript
-  if (Test-Path -LiteralPath $s) { & powershell -NoProfile -ExecutionPolicy Bypass -File $s sync 2>&1 | ForEach-Object { Write-Output "  $_" } }
   $new = Installed-Version
   if ($old -eq $new) { Write-Output "already up to date: $new" } else { Write-Output "updated: $old -> $new" }
 }
@@ -536,10 +549,12 @@ function Cmd-Uninstall {
   if (Test-Path -LiteralPath $cliDir) {
     try { Remove-Item -LiteralPath $cliDir -Force -ErrorAction Stop } catch {}
   }
+  # Remove skills wiring while the binary is still present so the settings
+  # unmerge can run, then drop the server itself.
+  Uninstall-Skills
   $server = Path-InTarget $ServerDir
   if (Test-Path -LiteralPath $server) { Remove-Item -LiteralPath $server -Recurse -Force }
   Write-Output "removed: $ServerDir"
-  Uninstall-Skills
   $ag = Path-InTarget "AGENTS.md"
   $text = Read-Text $ag
   if ($text -and $text.Contains($MarkBegin) -and $text.Contains($MarkEnd)) {

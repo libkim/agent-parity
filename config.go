@@ -202,3 +202,229 @@ func unmergeTOML(path string, raw []byte) error {
 	text := strings.TrimRight(strings.Join(out, "\n"), "\n") + "\n"
 	return os.WriteFile(path, []byte(text), 0o644)
 }
+
+// memoryPermissions are the permissions.allow entries that let Claude Code call
+// the memory tools without prompting.
+var memoryPermissions = []string{
+	"mcp__memory__memory_add",
+	"mcp__memory__memory_recent",
+	"mcp__memory__memory_search",
+	"mcp__memory__memory_get",
+}
+
+// mergeClaudeSettings merges agent-parity's keys into a Claude settings.json,
+// preserving every other key the user has. It sets autoMemoryEnabled false, adds
+// the memory server to enabledMcpjsonServers, adds the memory tool permissions to
+// permissions.allow, and installs or refreshes the SessionStart sync hook whose
+// command is hookCommand. Unlike a whole-file write this keeps user settings, and
+// unlike a grep check it actually applies template changes on update. Repeatable.
+func mergeClaudeSettings(path, hookCommand string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	root := map[string]any{}
+	if len(bytes.TrimSpace(raw)) > 0 {
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		if err := dec.Decode(&root); err != nil {
+			return err
+		}
+	}
+
+	// Built-in auto memory would capture natural-language saves into Claude's own
+	// store instead of the shared MCP, so agent-parity always disables it.
+	root["autoMemoryEnabled"] = false
+	root["enabledMcpjsonServers"] = addToStringArray(root["enabledMcpjsonServers"], "memory")
+
+	perms, _ := root["permissions"].(map[string]any)
+	if perms == nil {
+		perms = map[string]any{}
+	}
+	allow := perms["allow"]
+	for _, p := range memoryPermissions {
+		allow = addToStringArray(allow, p)
+	}
+	perms["allow"] = allow
+	root["permissions"] = perms
+
+	root["hooks"] = mergeSessionStartHook(root["hooks"], hookCommand)
+
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(out, '\n'), 0o644)
+}
+
+// addToStringArray returns existing (coerced to a slice) with val appended unless
+// it is already present, leaving any other members untouched.
+func addToStringArray(existing any, val string) []any {
+	arr, _ := existing.([]any)
+	for _, x := range arr {
+		if s, ok := x.(string); ok && s == val {
+			return arr
+		}
+	}
+	return append(arr, val)
+}
+
+// mergeSessionStartHook installs our sync hook into hooks.SessionStart, keeping
+// any hooks the user already has. If a sync-claude command is already present its
+// command is refreshed to the current one; otherwise a new entry is appended.
+func mergeSessionStartHook(existing any, command string) map[string]any {
+	hooks, _ := existing.(map[string]any)
+	if hooks == nil {
+		hooks = map[string]any{}
+	}
+	ss, _ := hooks["SessionStart"].([]any)
+	found := false
+	for _, entry := range ss {
+		em, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		inner, ok := em["hooks"].([]any)
+		if !ok {
+			continue
+		}
+		for _, h := range inner {
+			hm, ok := h.(map[string]any)
+			if !ok {
+				continue
+			}
+			if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "sync-claude") {
+				hm["command"] = command
+				found = true
+			}
+		}
+	}
+	if !found {
+		ss = append(ss, map[string]any{
+			"hooks": []any{
+				map[string]any{"type": "command", "command": command},
+			},
+		})
+	}
+	hooks["SessionStart"] = ss
+	return hooks
+}
+
+// unmergeClaudeSettings removes the keys mergeClaudeSettings added — the
+// autoMemoryEnabled flag, the memory server from enabledMcpjsonServers, the
+// memory permissions, and the sync hook — leaving every other setting the user
+// has. If nothing but our keys remained, the file is deleted outright.
+func unmergeClaudeSettings(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil
+	}
+	root := map[string]any{}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&root); err != nil {
+		return err
+	}
+
+	delete(root, "autoMemoryEnabled")
+
+	if servers := removeStrings(root["enabledMcpjsonServers"], []string{"memory"}); len(servers) == 0 {
+		delete(root, "enabledMcpjsonServers")
+	} else {
+		root["enabledMcpjsonServers"] = servers
+	}
+
+	if perms, ok := root["permissions"].(map[string]any); ok {
+		if allow := removeStrings(perms["allow"], memoryPermissions); len(allow) == 0 {
+			delete(perms, "allow")
+		} else {
+			perms["allow"] = allow
+		}
+		if len(perms) == 0 {
+			delete(root, "permissions")
+		} else {
+			root["permissions"] = perms
+		}
+	}
+
+	if hooks, ok := root["hooks"].(map[string]any); ok {
+		if ss := removeSyncHook(hooks["SessionStart"]); len(ss) == 0 {
+			delete(hooks, "SessionStart")
+		} else {
+			hooks["SessionStart"] = ss
+		}
+		if len(hooks) == 0 {
+			delete(root, "hooks")
+		} else {
+			root["hooks"] = hooks
+		}
+	}
+
+	if len(root) == 0 {
+		return os.Remove(path)
+	}
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(out, '\n'), 0o644)
+}
+
+// removeStrings returns existing (coerced to a slice) with every element equal to
+// one of vals dropped, preserving order and any non-matching members.
+func removeStrings(existing any, vals []string) []any {
+	arr, _ := existing.([]any)
+	drop := map[string]bool{}
+	for _, v := range vals {
+		drop[v] = true
+	}
+	out := []any{}
+	for _, x := range arr {
+		if s, ok := x.(string); ok && drop[s] {
+			continue
+		}
+		out = append(out, x)
+	}
+	return out
+}
+
+// removeSyncHook drops our sync-claude entries from a SessionStart list, keeping
+// any other hooks the user registered. An entry whose every hook was ours is
+// removed entirely; one that mixed ours with theirs keeps only theirs.
+func removeSyncHook(existing any) []any {
+	ss, _ := existing.([]any)
+	out := []any{}
+	for _, entry := range ss {
+		em, ok := entry.(map[string]any)
+		if !ok {
+			out = append(out, entry)
+			continue
+		}
+		inner, ok := em["hooks"].([]any)
+		if !ok {
+			out = append(out, entry)
+			continue
+		}
+		kept := []any{}
+		for _, h := range inner {
+			if hm, ok := h.(map[string]any); ok {
+				if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "sync-claude") {
+					continue
+				}
+			}
+			kept = append(kept, h)
+		}
+		if len(kept) == 0 {
+			continue
+		}
+		em["hooks"] = kept
+		out = append(out, em)
+	}
+	return out
+}

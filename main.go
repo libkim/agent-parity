@@ -98,6 +98,9 @@ func main() {
 	unmergeConfig := flag.String("unmerge-config", "", "remove the memory server entry from a JSON/TOML agent config and exit")
 	hasMemoryConfig := flag.String("has-memory-config", "", "report by exit status whether an agent config has a memory server entry")
 	command := flag.String("command", ".agents/mcp/memory/run.sh", "launcher path recorded by -merge-config")
+	mergeClaudeSettingsPath := flag.String("merge-claude-settings", "", "merge agent-parity's keys into a Claude settings.json and exit")
+	unmergeClaudeSettingsPath := flag.String("unmerge-claude-settings", "", "remove agent-parity's keys from a Claude settings.json and exit")
+	hookCommand := flag.String("hook-command", "", "SessionStart sync command recorded by -merge-claude-settings")
 	flag.Parse()
 
 	if *showVersion {
@@ -128,6 +131,22 @@ func main() {
 			os.Exit(2)
 		}
 		if !exists {
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *mergeClaudeSettingsPath != "" {
+		if err := mergeClaudeSettings(*mergeClaudeSettingsPath, *hookCommand); err != nil {
+			fmt.Fprintln(os.Stderr, "merge-claude-settings:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *unmergeClaudeSettingsPath != "" {
+		if err := unmergeClaudeSettings(*unmergeClaudeSettingsPath); err != nil {
+			fmt.Fprintln(os.Stderr, "unmerge-claude-settings:", err)
 			os.Exit(1)
 		}
 		return

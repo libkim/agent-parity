@@ -19,6 +19,9 @@ PROJECT_CLI_DIR=".agents/bin"
 SYNC_SCRIPT=".agents/scripts/sync-claude.sh"
 CLAUDE_SRC=".agents/claude/settings.json"
 CLAUDE_TGT=".claude/settings.json"
+# SessionStart command merged into the settings; $CLAUDE_PROJECT_DIR stays
+# literal for Claude to expand, so single-quote it.
+CLAUDE_HOOK='bash "$CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.sh" sync'
 MARK_BEGIN="<!-- agent-parity:begin -->"
 MARK_END="<!-- agent-parity:end -->"
 GI_BEGIN="# agent-parity:begin"
@@ -99,6 +102,20 @@ latest_version() {
     *) echo "unknown" ;;
   esac
 }
+
+# Pin scripts, templates, and binaries to the latest release tag so the whole
+# environment installs and updates as one version, not a mix of rolling main
+# and a released binary. Falls back to main when no release is found or when
+# AGENT_PARITY_RAW / AGENT_PARITY_RELEASE are set for development.
+if [ -z "${AGENT_PARITY_RAW:-}" ] || [ -z "${AGENT_PARITY_RELEASE:-}" ]; then
+  PINNED_TAG=$(latest_version)
+  case "$PINNED_TAG" in
+    v*)
+      [ -n "${AGENT_PARITY_RAW:-}" ]     || RAW="https://raw.githubusercontent.com/$REPO/$PINNED_TAG"
+      [ -n "${AGENT_PARITY_RELEASE:-}" ] || RELEASE="https://github.com/$REPO/releases/download/$PINNED_TAG"
+      ;;
+  esac
+fi
 
 newer_version_available() {
   installed=${1#v}
@@ -268,54 +285,55 @@ sync_gitignore() {
 # and Antigravity CLI read natively. Claude Code does not, so a SessionStart
 # hook mirrors it into .claude/skills each session — an internal shim that
 # keeps surface behavior identical across agents.
-# Pre-existing Claude-only skills are themselves a parity break, and the sync
-# would destroy them. Skills are self-contained folders, so moving them into
-# the shared source is mechanical and safe — unlike instruction prose, which
-# is only ever reported.
-adopt_claude_skills() {
-  [ -d "$TARGET/.claude/skills" ] || return 0
-  for d in "$TARGET/.claude/skills"/*/; do
-    [ -d "$d" ] || continue
-    name=$(basename "$d")
-    if [ ! -e "$TARGET/.agents/skills/$name" ]; then
-      mv "$d" "$TARGET/.agents/skills/$name"
-      echo "  adopted:    .claude/skills/$name -> .agents/skills/$name (now shared by all agents)"
-    elif ! diff -qr "$TARGET/.agents/skills/$name" "$d" >/dev/null 2>&1; then
-      mv "$d" "$TARGET/.agents/skills/$name.from-claude"
-      echo "  conflict:   .claude/skills/$name differs from the shared one — saved as .agents/skills/$name.from-claude, merge manually"
-    fi
+# Pre-existing per-agent skills (.claude, .codex, .cursor) are moved into the
+# shared source: Claude's must move or the sync would destroy them, and Codex's
+# and Cursor's would otherwise stay invisible to the other agents. Skills are
+# self-contained folders, so the move is mechanical and safe — unlike
+# instruction prose, which is only ever reported.
+adopt_agent_skills() {
+  for pair in .claude/skills:claude .codex/skills:codex .cursor/skills:cursor; do
+    dir=${pair%%:*}; label=${pair##*:}
+    [ -d "$TARGET/$dir" ] || continue
+    for d in "$TARGET/$dir"/*/; do
+      [ -d "$d" ] || continue
+      name=$(basename "$d")
+      if [ ! -e "$TARGET/.agents/skills/$name" ]; then
+        mv "$d" "$TARGET/.agents/skills/$name"
+        echo "  adopted:    $dir/$name -> .agents/skills/$name (now shared by all agents)"
+      elif ! diff -qr "$TARGET/.agents/skills/$name" "$d" >/dev/null 2>&1; then
+        mv "$d" "$TARGET/.agents/skills/$name.from-$label"
+        echo "  conflict:   $dir/$name differs from the shared one — saved as .agents/skills/$name.from-$label, merge manually"
+      fi
+    done
   done
 }
 
 install_skills() {
   echo "skills:"
   mkdir -p "$TARGET/.agents/skills"
-  adopt_claude_skills
+  adopt_agent_skills
   [ -n "$(ls -A "$TARGET/.agents/skills" 2>/dev/null)" ] || : > "$TARGET/.agents/skills/.gitkeep"
+  # sync-claude.sh is a generated shim we own outright (like run.sh), so
+  # overwrite it every run to keep it current — user skills live in
+  # .agents/skills, never here.
   s="$TARGET/$SYNC_SCRIPT"
-  if [ ! -e "$s" ]; then
-    mkdir -p "$(dirname "$s")"
-    fetch templates/sync-claude.sh > "$s"
-    chmod +x "$s"
-    echo "  wrote:      $SYNC_SCRIPT"
-  else
-    echo "  exists:     $SYNC_SCRIPT (kept as is)"
+  mkdir -p "$(dirname "$s")"
+  fetch templates/sync-claude.sh > "$s"
+  chmod +x "$s"
+  echo "  wrote:      $SYNC_SCRIPT"
+  # Merge our keys into the settings source, preserving any the user set. If only
+  # the generated .claude copy exists, seed the source from it first so nothing
+  # there is lost when sync regenerates the copy.
+  src="$TARGET/$CLAUDE_SRC"
+  mkdir -p "$(dirname "$src")"
+  if [ ! -e "$src" ] && [ -e "$TARGET/$CLAUDE_TGT" ]; then
+    cp "$TARGET/$CLAUDE_TGT" "$src"
+    echo "  migrated:   $CLAUDE_TGT -> $CLAUDE_SRC"
   fi
-  hook=$(fetch templates/claude.settings.json)
-  if [ -e "$TARGET/$CLAUDE_SRC" ]; then
-    if grep -q "sync-claude.sh" "$TARGET/$CLAUDE_SRC" 2>/dev/null; then
-      echo "  registered: $CLAUDE_SRC (hook already)"
-    else
-      echo "  exists:     $CLAUDE_SRC — merge this hook in:"
-      printf '%s\n' "$hook" | sed 's/^/    | /'
-    fi
-  elif [ -e "$TARGET/$CLAUDE_TGT" ]; then
-    echo "  exists:     $CLAUDE_TGT — move it to $CLAUDE_SRC (the synced source) and merge this hook in:"
-    printf '%s\n' "$hook" | sed 's/^/    | /'
+  if "$TARGET/$SERVER_DIR/dist/$BIN" -merge-claude-settings "$src" -hook-command "$CLAUDE_HOOK"; then
+    echo "  merged:     $CLAUDE_SRC (memory keys + sync hook)"
   else
-    mkdir -p "$(dirname "$TARGET/$CLAUDE_SRC")"
-    printf '%s\n' "$hook" > "$TARGET/$CLAUDE_SRC"
-    echo "  wrote:      $CLAUDE_SRC"
+    echo "  warn:       could not merge $CLAUDE_SRC" >&2
   fi
   bash "$TARGET/$SYNC_SCRIPT" sync 2>&1 | sed 's/^/  /'
 }
@@ -324,7 +342,6 @@ uninstall_skills() {
   s="$TARGET/$SYNC_SCRIPT"
   [ -e "$s" ] || return 0
   tpl=$(fetch templates/sync-claude.sh)
-  hook=$(fetch templates/claude.settings.json)
   if [ "$(cat "$s")" != "$tpl" ]; then
     echo "skills: $SYNC_SCRIPT differs from the packaged one — wiring left alone"
     return 0
@@ -336,12 +353,11 @@ uninstall_skills() {
   else
     rm -rf "$TARGET/.claude/skills"
   fi
-  if [ -e "$TARGET/$CLAUDE_TGT" ] && [ "$(cat "$TARGET/$CLAUDE_TGT")" = "$hook" ]; then
-    rm "$TARGET/$CLAUDE_TGT"
-  fi
-  if [ -e "$TARGET/$CLAUDE_SRC" ] && [ "$(cat "$TARGET/$CLAUDE_SRC")" = "$hook" ]; then
-    rm "$TARGET/$CLAUDE_SRC"
-  fi
+  # Strip our keys from the settings; the file is deleted if nothing else remains.
+  for f in "$CLAUDE_TGT" "$CLAUDE_SRC"; do
+    [ -e "$TARGET/$f" ] || continue
+    "$TARGET/$SERVER_DIR/dist/$BIN" -unmerge-claude-settings "$TARGET/$f" 2>/dev/null || true
+  done
   rm "$s"
   rmdir "$TARGET/.agents/claude" "$TARGET/.agents/scripts" "$TARGET/.claude" 2>/dev/null || true
   echo "skills: removed sync wiring"
@@ -458,11 +474,12 @@ cmd_update() {
   old=$(installed_version)
   download_server
   install_project_cli
+  echo "configs:"
+  for_each_config reg_config
+  reg_cursor_cli
+  install_skills
   sync_agents_block
   sync_gitignore
-  if [ -x "$TARGET/$SYNC_SCRIPT" ]; then
-    bash "$TARGET/$SYNC_SCRIPT" sync 2>&1 | sed 's/^/  /'
-  fi
   new=$(installed_version)
   if [ "$old" = "$new" ]; then
     echo "already up to date: $new"
@@ -498,10 +515,12 @@ cmd_uninstall() {
   unreg_cursor_cli
   rm -f "$TARGET/$PROJECT_CLI_DIR/agent-parity" "$TARGET/$PROJECT_CLI_DIR/agent-parity.cmd" "$TARGET/$PROJECT_CLI_DIR/agent-parity.ps1"
   rmdir "$TARGET/$PROJECT_CLI_DIR" 2>/dev/null || true
+  # Remove skills wiring while the binary is still present so the settings
+  # unmerge can run, then drop the server itself.
+  uninstall_skills
   rm -rf "$TARGET/$SERVER_DIR"
   rmdir "$TARGET/.agents/mcp" 2>/dev/null || true
   echo "removed: $SERVER_DIR"
-  uninstall_skills
   ag="$TARGET/AGENTS.md"
   if [ -e "$ag" ] && grep -qF "$MARK_BEGIN" "$ag" 2>/dev/null && grep -qF "$MARK_END" "$ag" 2>/dev/null; then
     tmp="$ag.agent-parity.tmp"
