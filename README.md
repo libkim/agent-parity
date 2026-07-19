@@ -49,13 +49,36 @@ session.
 Linux/macOS/WSL:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/libkim/agent-parity/main/install.sh | sh -s -- install
+(
+  repo=libkim/agent-parity
+  latest=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest")
+  tag=${latest##*/}
+  case "$tag" in v*) ;; *) echo "could not resolve latest agent-parity release" >&2; exit 1 ;; esac
+  export AGENT_PARITY_RAW="https://raw.githubusercontent.com/$repo/$tag"
+  export AGENT_PARITY_RELEASE="https://github.com/$repo/releases/download/$tag"
+  export AGENT_PARITY_VERSION="$tag"
+  installer=$(mktemp "${TMPDIR:-/tmp}/agent-parity-install.XXXXXX")
+  trap 'rm -f "$installer"' EXIT HUP INT TERM
+  curl -fsSL "$AGENT_PARITY_RAW/install.sh" -o "$installer"
+  sh "$installer" install
+)
 ```
 
 Native Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
+$repo = "libkim/agent-parity"
+$tag = (irm "https://api.github.com/repos/$repo/releases/latest").tag_name
+if ($tag -notmatch '^v') { throw "could not resolve latest agent-parity release" }
+$oldRaw, $oldRelease, $oldVersion = $env:AGENT_PARITY_RAW, $env:AGENT_PARITY_RELEASE, $env:AGENT_PARITY_VERSION
+try {
+  $env:AGENT_PARITY_RAW = "https://raw.githubusercontent.com/$repo/$tag"
+  $env:AGENT_PARITY_RELEASE = "https://github.com/$repo/releases/download/$tag"
+  $env:AGENT_PARITY_VERSION = $tag
+  irm "$env:AGENT_PARITY_RAW/install.ps1" | iex
+} finally {
+  $env:AGENT_PARITY_RAW, $env:AGENT_PARITY_RELEASE, $env:AGENT_PARITY_VERSION = $oldRaw, $oldRelease, $oldVersion
+}
 ```
 
 ### Adopting an existing setup
@@ -94,7 +117,7 @@ the right invocation for your OS.
 | --- | --- |
 | `status` | Checks the project files and the locally available agent CLIs. |
 | `version` | Reports the installed and latest version. |
-| `update` | Re-applies everything at the latest release — binaries, launchers, registrations, skills wiring, Claude settings, and the marker blocks. |
+| `update` | Re-applies everything at the latest release — pinned runtime metadata, launchers, registrations, skills wiring, Claude settings, and marker blocks. |
 | `uninstall` | Removes the installed artifacts. Add `--purge` to delete the memory store as well. |
 
 You can also run them directly from the project root:
@@ -110,21 +133,21 @@ whether that session currently exposes the memory tools.
 | Output | Value | Meaning |
 | --- | --- | --- |
 | `target` | `<path>` | Project directory being inspected. |
-| `server` | `dev` | A locally built current-source binary: it supports `-version`, but no release version was stamped into it. |
-|  | `vX.Y.Z` | A release-stamped binary; its version can be compared with the latest release. |
-|  | `unknown (pre-versioning build)` | The binary exists and runs, but does not support `-version`; it was built before version reporting was added. |
-|  | `missing` | The binary for this OS and architecture is missing from the expected `dist/` path. |
+| `server` | `dev` | Development runtime metadata is installed. |
+|  | `vX.Y.Z` | The project is pinned to this release; its version can be compared with the latest release. |
+|  | `missing` | The pinned `VERSION` or `RELEASE` metadata is missing. |
 | `launcher` | `ok` | The OS-appropriate launcher exists. |
-|  | `missing` | The launcher is absent; agents cannot start the bundled binary. |
+|  | `missing` | The launcher is absent; agents cannot resolve the cached runtime. |
 | `latest release` | `vX.Y.Z` | GitHub's latest release was found. |
-|  | `unknown` | The latest release could not be checked, for example because the network is unavailable. |
+|  | `unknown (network unavailable)` | The latest release could not be checked because the network request failed or returned an invalid release. |
 | `update available` | `<installed> -> <latest>` | Printed only when both versions are valid semantic versions and the latest release is newer. |
 | `mcp registrations` | `registered` | The agent config points to this install's launcher. |
-|  | `registered for Windows` / `registered for Unix` | The config points to the launcher for the other OS; run `install` or `update` on this OS to retarget it. |
+|  | `registered for Windows` / `registered for Unix` | The config points to the launcher for the other OS. A trusted self-heal hook retargets it when the next agent session starts. |
 |  | `points elsewhere` | A `memory` MCP entry exists, but it points to another launcher; it is deliberately not overwritten. |
 |  | `config missing` | The agent config file is absent. |
 |  | `not registered` | The config file exists but has no usable entry for this install. |
 | `agent-specific diagnostics` | CLI found / not found, registration result | Extra checks offered by the installed agent CLI. These are not a check of the current agent session's tool visibility. |
+| `self-heal hooks` | `registered` / `missing` | Whether Claude, Codex, Cursor, and Antigravity can retarget the memory launcher at session start. Codex requires the project hook to be reviewed and trusted. |
 | `skills` | `<n> in .agents/skills; sync script present` | Shared skill source and Claude sync script are installed. |
 |  | `sync wiring missing` | The Claude skill-sync script is absent. |
 | `hook` | `registered` / `missing` | Whether Claude's session-start hook will sync skills into `.claude/skills`. |
@@ -144,19 +167,27 @@ ends up stored.
 
 ## How it works
 
-Everything installed is committed to the repo. The first machine runs `install`
-once; that vendors the binaries and wiring into the repo, so every machine that
-later pulls it needs no reinstall. `.claude/` is generated per session from
-`.agents/` and stays out of git. If the project's `.gitignore` would hide these
-files, `install` maintains a marker block of rules to keep them tracked and
-`uninstall` reverts it. Git is optional — it only matters for sharing across
-machines or teammates.
+The portable wiring, release metadata, memory, and skills are committed to the
+repo; MCP binaries are not. On first use, `run.sh` / `run.cmd` downloads only
+the current platform's binary from the project's pinned release, verifies it
+against `checksums.txt`, and stores it in a per-user cache shared by projects.
+Install/update also places the current platform's small `agent-parity-config`
+editor in that shared cache. Local management commands use it to parse and
+edit JSON/TOML without starting the MCP server or downloading anything during
+the command.
+The default cache is `$XDG_CACHE_HOME/agent-parity` (or
+`~/.cache/agent-parity`) on Unix and `%LOCALAPPDATA%\agent-parity\cache` on
+Windows; `AGENT_PARITY_CACHE` overrides it. `uninstall` leaves this shared
+cache alone. `.claude/` is generated per session from `.agents/` and stays out
+of git. If the project's `.gitignore` would hide the tracked wiring, `install`
+maintains a marker block and `uninstall` reverts it. Git is optional — it only
+matters for sharing across machines or teammates.
 
 agent-parity handles your content and its own wiring differently. In the agent
 configs and Claude settings it merges only its own entries, so your other
 settings there — and a `memory` entry you repoint at another server — are
 preserved. The marker blocks in `AGENTS.md` and `.gitignore` and the generated
-shims (launchers, sync scripts, the management command, and the `agent-parity`
+shims (launchers, command scripts, sync scripts, and the `agent-parity`
 skill) are regenerated by `update` to stay current, so don't edit those copies;
 `uninstall` removes what it added. Your memory store and your own skills in
 `.agents/skills/` are never modified or deleted (`--purge` deletes the store on
@@ -165,6 +196,18 @@ sitting in a per-agent folder (`.claude`, `.codex`, or `.cursor` `skills/`) are
 moved into the shared `.agents/skills/` at install so every agent shares them;
 after `uninstall`, a `.claude/skills` copy is left so Claude — which can't read
 the shared folder — keeps its skills without the sync.
+
+### Cross-OS self-heal
+
+The committed MCP configs point to either `run.sh` or `run.cmd`. At session
+start, the managed hooks inspect all four configs and change only an
+agent-parity-owned `memory` command to the launcher for the current OS. A
+user-supplied `memory` server is never overwritten. When a file changes, the
+hook asks you to restart the current agent session because MCP tools were
+loaded before the repair; an unchanged run is silent. The repair uses only the
+installed local script; it never downloads or starts
+the MCP server binary. Codex project hooks must be reviewed and trusted with
+`/hooks` (or the Hooks UI) before they run.
 
 ### Memory
 
@@ -178,10 +221,12 @@ results.
 
 Drop standard Agent Skills (`<name>/SKILL.md`) into `.agents/skills/`. Codex,
 Cursor, and Antigravity CLI load them from there directly. For Claude Code, the
-installed SessionStart hook runs the platform sync script (`sync-claude.sh` on
-Unix, `sync-claude.ps1` on native Windows), which recreates `.claude/skills`
-and `.claude/settings.json` from the `.agents/` source at the start of every
-session. Edit only the source; the generated copy is disposable.
+installed SessionStart hook calls `.agents/bin/agent-parity sync-claude`; the
+project-local launcher selects `sync-claude.sh` on Unix or `sync-claude.ps1` on
+native Windows. That recreates `.claude/skills` and `.claude/settings.json`
+from the `.agents/` source at the start of every session. A separate Claude
+SessionStart hook runs MCP self-heal independently. Edit only the source;
+the generated copy is disposable.
 `.claude/settings.local.json` is never touched, so machine-local settings stay
 local.
 
@@ -189,20 +234,36 @@ local.
 
 | Path | Contents |
 | --- | --- |
-| `.agents/mcp/memory/` | memory server: launchers (`run.sh`, `run.cmd`) + `dist/<binary>` |
-| `.agents/bin/` | project-local management command (`agent-parity`, `.cmd`, `.ps1`) |
+| `.agents/mcp/memory/` | memory server launchers plus pinned `VERSION` and `RELEASE` metadata; no binaries |
+| `.agents/bin/` | project-local launchers (`agent-parity`, `agent-parity.cmd`) |
 | `.agents/memory/` | the memory store — one markdown file per memory |
 | `.agents/skills/` | shared skills source (yours to fill) |
 | `.agents/skills/agent-parity/` | managed skill for running the management commands from any agent |
-| `.agents/scripts/sync-claude.{sh,ps1}` | sync script that mirrors skills into `.claude`. Only the one for the installing OS is created (`.sh` on Unix, `.ps1` on Windows). |
-| `.agents/claude/settings.json` | Claude settings source with the sync hook (OS-specific contents) |
+| `.agents/scripts/common.{sh,ps1}` | shared functions used by the local management commands |
+| `.agents/scripts/{status,version,uninstall}.{sh,ps1}` | separate project-local management commands |
+| `.agents/scripts/sync-claude.{sh,ps1}` | sync script that mirrors skills into `.claude` |
+| `.agents/scripts/self-heal.{sh,ps1}` | retargets managed MCP registrations to the current OS launcher |
+| `.agents/claude/settings.json` | Claude settings source with the platform-neutral sync hook |
 | `.agents/mcp_config.json` | memory server registered for Antigravity CLI |
+| `.agents/hooks.json` | Antigravity self-heal hook |
 | `.mcp.json` | memory server registered for Claude Code |
 | `.cursor/mcp.json` | memory server registered for Cursor |
 | `.cursor/cli.json` | memory-tool auto-approval allowlist for Cursor |
+| `.cursor/hooks.json` | Cursor session-start self-heal hook |
 | `.codex/config.toml` | memory server registered for Codex |
+| `.codex/hooks.json` | Codex session-start self-heal hook (requires trust) |
 | `AGENTS.md` | instruction block, delimited by markers |
 | `CLAUDE.md` | `@AGENTS.md` import wrapper |
+
+`install.sh` / `install.ps1` are remote install-only entrypoints. For
+`agent-parity update`, the project launcher resolves the latest release and
+runs that release's remote `update.sh` / `update.ps1`; no updater is kept in
+`.agents/scripts`.
+
+`uninstall` is fully offline and never starts the MCP launcher. Native Windows
+uses PowerShell's JSON support; the Unix command uses the verified
+`agent-parity-config` editor installed in the shared cache. Neither path needs
+Python or another user-installed runtime.
 
 ## License
 

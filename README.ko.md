@@ -43,13 +43,36 @@
 Linux/macOS/WSL:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/libkim/agent-parity/main/install.sh | sh -s -- install
+(
+  repo=libkim/agent-parity
+  latest=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest")
+  tag=${latest##*/}
+  case "$tag" in v*) ;; *) echo "could not resolve latest agent-parity release" >&2; exit 1 ;; esac
+  export AGENT_PARITY_RAW="https://raw.githubusercontent.com/$repo/$tag"
+  export AGENT_PARITY_RELEASE="https://github.com/$repo/releases/download/$tag"
+  export AGENT_PARITY_VERSION="$tag"
+  installer=$(mktemp "${TMPDIR:-/tmp}/agent-parity-install.XXXXXX")
+  trap 'rm -f "$installer"' EXIT HUP INT TERM
+  curl -fsSL "$AGENT_PARITY_RAW/install.sh" -o "$installer"
+  sh "$installer" install
+)
 ```
 
 Native Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
+$repo = "libkim/agent-parity"
+$tag = (irm "https://api.github.com/repos/$repo/releases/latest").tag_name
+if ($tag -notmatch '^v') { throw "could not resolve latest agent-parity release" }
+$oldRaw, $oldRelease, $oldVersion = $env:AGENT_PARITY_RAW, $env:AGENT_PARITY_RELEASE, $env:AGENT_PARITY_VERSION
+try {
+  $env:AGENT_PARITY_RAW = "https://raw.githubusercontent.com/$repo/$tag"
+  $env:AGENT_PARITY_RELEASE = "https://github.com/$repo/releases/download/$tag"
+  $env:AGENT_PARITY_VERSION = $tag
+  irm "$env:AGENT_PARITY_RAW/install.ps1" | iex
+} finally {
+  $env:AGENT_PARITY_RAW, $env:AGENT_PARITY_RELEASE, $env:AGENT_PARITY_VERSION = $oldRaw, $oldRelease, $oldVersion
+}
 ```
 
 ### 기존 설정이 있는 프로젝트에 도입하기
@@ -79,7 +102,7 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 | --- | --- |
 | `status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
 | `version` | 설치된 버전과 최신 버전을 보고합니다. |
-| `update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 바이너리·런처·등록·스킬 배선·Claude 설정·마커 블록. |
+| `update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 고정 런타임 메타데이터·런처·등록·스킬 배선·Claude 설정·마커 블록. |
 | `uninstall` | 설치 산출물을 제거합니다. `--purge`를 붙이면 메모리 저장소까지 함께 지웁니다. |
 
 프로젝트 루트에서 직접 실행할 수도 있습니다: Linux/macOS/WSL은 `./.agents/bin/agent-parity <명령>`, Windows PowerShell은 `.\.agents\bin\agent-parity.cmd <명령>`.
@@ -92,21 +115,21 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 | 출력 항목 | 값 | 의미 |
 | --- | --- | --- |
 | `target` | `<경로>` | 점검 대상 프로젝트 디렉터리입니다. |
-| `server` | `dev` | 현재 소스로 로컬 빌드한 바이너리입니다. `-version`은 지원하지만 릴리스 버전이 주입되지 않았습니다. |
-|  | `vX.Y.Z` | 릴리스 버전이 찍힌 바이너리입니다. 최신 릴리스와 버전을 비교할 수 있습니다. |
-|  | `unknown (pre-versioning build)` | 바이너리는 존재하고 실행되지만 `-version`을 지원하지 않습니다. 버전 보고 기능이 추가되기 전 빌드입니다. |
-|  | `missing` | 이 OS·아키텍처용 바이너리가 예상한 `dist/` 경로에 없습니다. |
+| `server` | `dev` | 개발용 런타임 메타데이터가 설치돼 있습니다. |
+|  | `vX.Y.Z` | 프로젝트가 이 릴리스에 고정돼 있으며 최신 릴리스와 비교할 수 있습니다. |
+|  | `missing` | 고정된 `VERSION` 또는 `RELEASE` 메타데이터가 없습니다. |
 | `launcher` | `ok` | 현재 OS용 런처가 있습니다. |
-|  | `missing` | 런처가 없어 에이전트가 포함된 바이너리를 시작할 수 없습니다. |
+|  | `missing` | 런처가 없어 에이전트가 캐시된 런타임을 찾을 수 없습니다. |
 | `latest release` | `vX.Y.Z` | GitHub에서 최신 릴리스를 찾았습니다. |
-|  | `unknown` | 네트워크를 쓸 수 없는 경우처럼 최신 릴리스를 확인하지 못했습니다. |
+|  | `unknown (network unavailable)` | 네트워크 요청이 실패했거나 유효한 릴리스를 돌려주지 않아 최신 릴리스를 확인하지 못했습니다. |
 | `update available` | `<설치본> -> <최신본>` | 두 버전이 모두 유효한 시맨틱 버전이고 최신 릴리스가 더 새로울 때만 출력합니다. |
 | `mcp registrations` | `registered` | 에이전트 설정이 이 설치본의 런처를 가리킵니다. |
-|  | `registered for Windows` / `registered for Unix` | 설정이 다른 OS용 런처를 가리킵니다. 현재 OS에서 `install` 또는 `update`를 실행해 재지정합니다. |
+|  | `registered for Windows` / `registered for Unix` | 설정이 다른 OS용 런처를 가리킵니다. 신뢰된 self-heal 훅이 다음 에이전트 세션 시작 시 현재 OS용 런처로 재지정합니다. |
 |  | `points elsewhere` | `memory` MCP 항목은 있지만 다른 런처를 가리킵니다. 기존 설정을 덮어쓰지 않습니다. |
 |  | `config missing` | 에이전트 설정 파일이 없습니다. |
 |  | `not registered` | 설정 파일은 있지만 이 설치본에 쓸 수 있는 등록 항목이 없습니다. |
 | `agent-specific diagnostics` | CLI 있음/없음, 등록 결과 | 설치된 에이전트 CLI가 제공하는 추가 검사입니다. 현재 에이전트 세션의 도구 노출 여부를 검사하지는 않습니다. |
+| `self-heal hooks` | `registered` / `missing` | Claude, Codex, Cursor, Antigravity가 세션 시작 시 메모리 런처를 재지정할 수 있는지 여부입니다. Codex 프로젝트 훅은 사용자가 검토하고 신뢰해야 합니다. |
 | `skills` | `<n> in .agents/skills; sync script present` | 공유 스킬 원본과 Claude 동기화 스크립트가 설치돼 있습니다. |
 |  | `sync wiring missing` | Claude 스킬 동기화 스크립트가 없습니다. |
 | `hook` | `registered` / `missing` | Claude 세션 시작 훅이 `.claude/skills`로 스킬을 동기화하는지 여부입니다. |
@@ -124,9 +147,13 @@ irm https://raw.githubusercontent.com/libkim/agent-parity/main/install.ps1 | iex
 
 ## 동작 방식
 
-설치되는 파일은 모두 저장소에 커밋합니다. 첫 머신에서 `install`을 한 번 실행하면 바이너리와 배선이 저장소에 담기고(vendoring), 그 뒤로 pull하는 다른 머신은 다시 설치할 필요가 없습니다. `.claude/`는 세션마다 `.agents/`에서 다시 생성되므로 git에서 뺍니다. `.gitignore`가 이 파일들을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
+이식 가능한 배선, 릴리스 메타데이터, 메모리와 스킬은 저장소에 커밋하지만 MCP 바이너리는 커밋하지 않습니다. `run.sh` / `run.cmd`는 처음 사용할 때 프로젝트에 고정된 릴리스에서 현재 플랫폼 바이너리 하나만 내려받고 `checksums.txt`로 검증한 뒤 프로젝트들이 공유하는 사용자 캐시에 저장합니다. install/update는 같은 캐시에 현재 플랫폼용 소형 `agent-parity-config` 편집기도 설치합니다. 로컬 관리 명령은 이 편집기로 JSON/TOML을 파싱하고 수정하므로, 명령 실행 중 MCP 서버를 시작하거나 파일을 내려받지 않습니다. 기본 캐시는 Unix에서 `$XDG_CACHE_HOME/agent-parity`(없으면 `~/.cache/agent-parity`), Windows에서 `%LOCALAPPDATA%\agent-parity\cache`이며 `AGENT_PARITY_CACHE`로 바꿀 수 있습니다. `uninstall`은 공유 캐시를 지우지 않습니다. `.claude/`는 세션마다 `.agents/`에서 다시 생성되므로 git에서 뺍니다. `.gitignore`가 추적할 배선 파일을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
 
 agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 에이전트 설정과 Claude 설정에는 자기 항목만 병합하므로, 그 안의 다른 설정과 사용자가 다른 서버로 바꿔 둔 `memory` 항목은 보존됩니다. `AGENTS.md`·`.gitignore`의 마커 블록과 생성 shim(런처, 동기화 스크립트, 관리 명령, `agent-parity` 스킬)은 `update`가 최신 상태로 다시 만드니 그 사본은 직접 고치지 마세요. `uninstall`은 자신이 넣은 것을 제거합니다. 메모리 저장소와 `.agents/skills/`의 사용자 스킬은 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 에이전트별 폴더(`.claude`·`.codex`·`.cursor`의 `skills/`)에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 합니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
+
+### 크로스 OS self-heal
+
+커밋된 MCP 설정은 `run.sh` 또는 `run.cmd` 중 하나를 가리킵니다. 관리 훅은 세션이 시작될 때 네 설정을 검사하고, agent-parity가 소유한 `memory` 명령만 현재 OS용 런처로 바꿉니다. 사용자가 직접 등록한 다른 `memory` 서버는 덮어쓰지 않습니다. 설정이 바뀌면 MCP 도구가 교정 전에 이미 로드됐으므로 현재 에이전트 세션을 재시작하라고 안내하며, 변경이 없으면 아무것도 출력하지 않습니다. 교정은 설치된 로컬 스크립트만 사용하며 MCP 서버 바이너리를 다운로드하거나 실행하지 않습니다. Codex 프로젝트 훅은 실행 전에 `/hooks` 또는 Hooks UI에서 검토하고 신뢰해야 합니다.
 
 ### 메모리
 
@@ -134,26 +161,36 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 
 ### 스킬
 
-표준 Agent Skills(`<name>/SKILL.md`)를 `.agents/skills/`에 넣습니다. Codex, Cursor, Antigravity CLI는 거기서 바로 불러옵니다. Claude Code는 설치된 SessionStart 훅이 플랫폼 동기화 스크립트(Unix는 `sync-claude.sh`, native Windows는 `sync-claude.ps1`)를 실행해 세션이 시작될 때마다 `.agents/` 원본에서 `.claude/skills`와 `.claude/settings.json`을 다시 만듭니다. 수정은 원본에만 하고, 생성된 사본은 언제든 버려도 됩니다. `.claude/settings.local.json`은 절대 건드리지 않으므로 머신 로컬 설정은 로컬에 남습니다.
+표준 Agent Skills(`<name>/SKILL.md`)를 `.agents/skills/`에 넣습니다. Codex, Cursor, Antigravity CLI는 거기서 바로 불러옵니다. Claude Code의 SessionStart 훅은 `.agents/bin/agent-parity sync-claude`를 호출하고, 프로젝트 로컬 런처가 Unix에서는 `sync-claude.sh`, native Windows에서는 `sync-claude.ps1`을 선택합니다. MCP self-heal은 별도의 Claude SessionStart 훅으로 독립 실행됩니다. 그러면 세션이 시작될 때마다 `.agents/` 원본에서 `.claude/skills`와 `.claude/settings.json`을 다시 만듭니다. 수정은 원본에만 하고, 생성된 사본은 언제든 버려도 됩니다. `.claude/settings.local.json`은 절대 건드리지 않으므로 머신 로컬 설정은 로컬에 남습니다.
 
 ## 설치 시 생성되는 파일
 
 | 경로 | 내용 |
 | --- | --- |
-| `.agents/mcp/memory/` | 메모리 서버: 런처(`run.sh`, `run.cmd`) + `dist/<바이너리>` |
-| `.agents/bin/` | 프로젝트 로컬 관리 명령(`agent-parity`, `.cmd`, `.ps1`) |
+| `.agents/mcp/memory/` | 메모리 서버 런처와 고정된 `VERSION`·`RELEASE` 메타데이터; 바이너리는 없음 |
+| `.agents/bin/` | 프로젝트 로컬 런처(`agent-parity`, `agent-parity.cmd`) |
 | `.agents/memory/` | 메모리 저장소 — 메모리 하나가 마크다운 파일 하나 |
 | `.agents/skills/` | 공유 스킬 원본 (사용자가 채우는 곳) |
 | `.agents/skills/agent-parity/` | 어느 에이전트에서든 관리 명령을 실행하는 관리 스킬 |
-| `.agents/scripts/sync-claude.{sh,ps1}` | 스킬을 `.claude`로 미러링하는 동기화 스크립트. 설치한 OS의 것만 생성됩니다(Unix는 `.sh`, Windows는 `.ps1`). |
-| `.agents/claude/settings.json` | 동기화 훅이 담긴 Claude 설정 원본 (OS별 내용) |
+| `.agents/scripts/common.{sh,ps1}` | 로컬 관리 명령이 공유하는 공통 함수 |
+| `.agents/scripts/{status,version,uninstall}.{sh,ps1}` | 서로 분리된 프로젝트 로컬 관리 명령 |
+| `.agents/scripts/sync-claude.{sh,ps1}` | 스킬을 `.claude`로 미러링하는 동기화 스크립트 |
+| `.agents/scripts/self-heal.{sh,ps1}` | 관리되는 MCP 등록을 현재 OS용 런처로 재지정하는 스크립트 |
+| `.agents/claude/settings.json` | 플랫폼 독립 동기화 훅이 담긴 Claude 설정 원본 |
 | `.agents/mcp_config.json` | Antigravity CLI에 메모리 서버 등록 |
+| `.agents/hooks.json` | Antigravity self-heal 훅 |
 | `.mcp.json` | Claude Code에 메모리 서버 등록 |
 | `.cursor/mcp.json` | Cursor에 메모리 서버 등록 |
 | `.cursor/cli.json` | Cursor용 메모리 도구 자동 승인 허용목록 |
+| `.cursor/hooks.json` | Cursor 세션 시작 self-heal 훅 |
 | `.codex/config.toml` | Codex에 메모리 서버 등록 |
+| `.codex/hooks.json` | Codex 세션 시작 self-heal 훅(신뢰 승인 필요) |
 | `AGENTS.md` | 마커로 구분된 지침 블록 |
 | `CLAUDE.md` | `@AGENTS.md` 임포트 래퍼 |
+
+`install.sh` / `install.ps1`은 원격 설치 전용 진입점입니다. `agent-parity update`를 실행하면 프로젝트 런처가 최신 릴리스를 확인한 뒤 해당 릴리스의 원격 `update.sh` / `update.ps1`을 실행합니다. `.agents/scripts`에는 업데이트 파일을 두지 않습니다.
+
+`uninstall`은 완전히 오프라인으로 동작하며 MCP 런처를 실행하지 않습니다. 네이티브 Windows는 PowerShell의 JSON 처리를 사용하고, Unix 명령은 공유 캐시에 설치된 검증된 `agent-parity-config` 편집기를 사용합니다. 어느 쪽도 Python이나 별도의 사용자 설치 런타임을 요구하지 않습니다.
 
 ## 라이선스
 

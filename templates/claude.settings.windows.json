@@ -17,7 +17,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"& \\\"$env:CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.ps1\\\" sync\""
+            "command": ".agents/bin/agent-parity sync-claude"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/bin/agent-parity self-heal",
+            "timeout": 30
           }
         ]
       }

@@ -1,4 +1,5 @@
 /dist/
+/.agents/mcp/memory/dist/
 /memory/
 /.cache/
 # agent-parity:begin

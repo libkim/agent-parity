@@ -1,3 +1,5 @@
+//go:build !configeditor
+
 // Command memory-mcp is a lightweight, dependency-free stdio MCP server that
 // stores cross-agent memory as plain markdown files. It exposes four tools:
 // memory_add, memory_search, memory_recent, memory_get.
@@ -95,12 +97,17 @@ func main() {
 	dir := flag.String("dir", "", "memory directory (overrides $MEMORY_DIR; default ./memory)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	mergeConfig := flag.String("merge-config", "", "add the memory server entry to a JSON/TOML agent config and exit")
+	retargetConfig := flag.String("retarget-config", "", "retarget an agent-parity-owned memory server entry and exit")
 	unmergeConfig := flag.String("unmerge-config", "", "remove the memory server entry from a JSON/TOML agent config and exit")
 	hasMemoryConfig := flag.String("has-memory-config", "", "report by exit status whether an agent config has a memory server entry")
 	command := flag.String("command", ".agents/mcp/memory/run.sh", "launcher path recorded by -merge-config")
 	mergeClaudeSettingsPath := flag.String("merge-claude-settings", "", "merge agent-parity's keys into a Claude settings.json and exit")
 	unmergeClaudeSettingsPath := flag.String("unmerge-claude-settings", "", "remove agent-parity's keys from a Claude settings.json and exit")
+	mergeAgentHookPath := flag.String("merge-agent-hook", "", "merge an agent-parity self-heal handler into a hook JSON file and exit")
+	unmergeAgentHookPath := flag.String("unmerge-agent-hook", "", "remove an agent-parity self-heal handler from a hook JSON file and exit")
+	hookKind := flag.String("hook-kind", "", "agent hook format: claude, codex, cursor, or antigravity")
 	hookCommand := flag.String("hook-command", "", "SessionStart sync command recorded by -merge-claude-settings")
+	hookCommandWindows := flag.String("hook-command-windows", "", "Windows override recorded by -merge-agent-hook")
 	flag.Parse()
 
 	if *showVersion {
@@ -112,6 +119,20 @@ func main() {
 		if err := mergeServerConfig(*mergeConfig, *command); err != nil {
 			fmt.Fprintln(os.Stderr, "merge-config:", err)
 			os.Exit(1)
+		}
+		return
+	}
+
+	if *retargetConfig != "" {
+		changed, err := retargetMemoryConfig(*retargetConfig, *command)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "retarget-config:", err)
+			os.Exit(1)
+		}
+		if changed {
+			fmt.Println("changed")
+		} else {
+			fmt.Println("unchanged")
 		}
 		return
 	}
@@ -147,6 +168,22 @@ func main() {
 	if *unmergeClaudeSettingsPath != "" {
 		if err := unmergeClaudeSettings(*unmergeClaudeSettingsPath); err != nil {
 			fmt.Fprintln(os.Stderr, "unmerge-claude-settings:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *mergeAgentHookPath != "" {
+		if err := mergeAgentHook(*mergeAgentHookPath, *hookKind, *hookCommand, *hookCommandWindows); err != nil {
+			fmt.Fprintln(os.Stderr, "merge-agent-hook:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *unmergeAgentHookPath != "" {
+		if err := unmergeAgentHook(*unmergeAgentHookPath, *hookKind); err != nil {
+			fmt.Fprintln(os.Stderr, "unmerge-agent-hook:", err)
 			os.Exit(1)
 		}
 		return

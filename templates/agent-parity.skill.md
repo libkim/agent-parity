@@ -15,7 +15,7 @@ Commands:
 
 - `status` — check the installed files and the locally available agent CLIs.
 - `version` — report the installed and latest version.
-- `update` — re-apply everything at the latest release: binaries, launchers, registrations, skills wiring, Claude settings, and the marker blocks.
+- `update` — fetch the latest release updater and re-apply binaries, launchers, registrations, skills wiring, Claude settings, and marker blocks.
 - `uninstall` — remove the installed artifacts. Add `--purge` to also delete the memory store.
 
 Run the chosen command with the shell tool and show the user its output. Always

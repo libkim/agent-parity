@@ -89,7 +89,9 @@ func (s *Store) read(id string) (Entry, error) {
 }
 
 func parseEntry(id string, raw []byte) (Entry, error) {
-	text := string(raw)
+	// Git and Windows tools may check memory files out with CRLF. Parse the
+	// frontmatter against one canonical newline form while keeping writes LF.
+	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	if !strings.HasPrefix(text, "---\n") {
 		return Entry{ID: id, Body: strings.TrimSpace(text), Strength: 1}, nil
 	}

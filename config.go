@@ -4,16 +4,48 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+	"github.com/pelletier/go-toml/v2/unstable"
 )
 
 // memoryTools names the tools the memory server exposes. Codex auto-approval
 // writes one [mcp_servers.memory.tools.<tool>] table per name.
 var memoryTools = []string{"memory_add", "memory_recent", "memory_search", "memory_get"}
+
+func writeConfigFile(path string, data []byte, fallbackMode os.FileMode) error {
+	mode := fallbackMode
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".agent-parity.*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
 
 // mergeServerConfig adds a `memory` MCP server entry pointing at command into
 // an existing agent config, preserving everything else. JSON files are parsed
@@ -70,6 +102,84 @@ func hasMemoryServer(path string) (bool, error) {
 	}
 }
 
+func configMemoryCommand(path string) (string, bool, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", false, err
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".json":
+		root := map[string]any{}
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		if err := dec.Decode(&root); err != nil {
+			return "", false, err
+		}
+		servers, ok := root["mcpServers"].(map[string]any)
+		if !ok {
+			return "", false, nil
+		}
+		memory, ok := servers["memory"].(map[string]any)
+		if !ok {
+			if _, exists := servers["memory"]; exists {
+				return "", true, fmt.Errorf("memory server is not an object")
+			}
+			return "", false, nil
+		}
+		command, ok := memory["command"].(string)
+		if !ok {
+			return "", true, fmt.Errorf("memory server command is not a string")
+		}
+		return command, true, nil
+	case ".toml":
+		var root struct {
+			MCPServers map[string]any `toml:"mcp_servers"`
+		}
+		if err := toml.Unmarshal(raw, &root); err != nil {
+			return "", false, err
+		}
+		memory, ok := root.MCPServers["memory"].(map[string]any)
+		if !ok {
+			if _, exists := root.MCPServers["memory"]; exists {
+				return "", true, fmt.Errorf("memory server is not a table")
+			}
+			return "", false, nil
+		}
+		command, ok := memory["command"].(string)
+		if !ok {
+			return "", true, fmt.Errorf("memory server command is not a string")
+		}
+		return command, true, nil
+	default:
+		return "", false, fmt.Errorf("unsupported config type: %s", path)
+	}
+}
+
+func ensureMemoryConfig(path, command string) (bool, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return false, err
+		}
+		initial := []byte("{}\n")
+		if strings.EqualFold(filepath.Ext(path), ".toml") {
+			initial = nil
+		}
+		if err := writeConfigFile(path, initial, 0o644); err != nil {
+			return false, err
+		}
+	} else if err != nil {
+		return false, err
+	}
+	_, exists, err := configMemoryCommand(path)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return true, mergeServerConfig(path, command)
+	}
+	return retargetMemoryConfig(path, command)
+}
+
 func mergeJSON(path string, raw []byte, command string) error {
 	root := map[string]any{}
 	if len(bytes.TrimSpace(raw)) > 0 {
@@ -96,7 +206,7 @@ func mergeJSON(path string, raw []byte, command string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(out, '\n'), 0o644)
+	return writeConfigFile(path, append(out, '\n'), 0o644)
 }
 
 func mergeTOML(path string, raw []byte, command string) error {
@@ -123,7 +233,7 @@ func mergeTOML(path string, raw []byte, command string) error {
 	for _, tool := range memoryTools {
 		text += fmt.Sprintf("\n[mcp_servers.memory.tools.%s]\napproval_mode = \"approve\"\n", tool)
 	}
-	return os.WriteFile(path, []byte(text), 0o644)
+	return writeConfigFile(path, []byte(text), 0o644)
 }
 
 // unmergeServerConfig removes the `memory` server entry, the inverse of a
@@ -163,44 +273,108 @@ func unmergeJSON(path string, raw []byte) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(out, '\n'), 0o644)
+	return writeConfigFile(path, append(out, '\n'), 0o644)
 }
 
-// isMemoryTableHeader reports whether a trimmed TOML header line names the
-// memory server table or one of its sub-tables — [mcp_servers.memory] or
-// [mcp_servers.memory.tools.*]. It deliberately does not match an unrelated
-// server whose name merely starts with "memory" (e.g. [mcp_servers.memory2]).
-func isMemoryTableHeader(line string) bool {
-	if line == "[mcp_servers.memory]" {
-		return true
+func unmergeCursorCLI(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
 	}
-	return strings.HasPrefix(line, "[mcp_servers.memory.") && strings.HasSuffix(line, "]")
-}
-
-func unmergeTOML(path string, raw []byte) error {
-	var out []string
-	skipping, removed := false, false
-	for _, ln := range strings.Split(string(raw), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(ln), "[") {
-			// Ours is [mcp_servers.memory] and every [mcp_servers.memory.tools.*]
-			// approval sub-table; each is its own header line. A different table
-			// (e.g. [mcp_servers.other]) ends the skip so it is kept.
-			if isMemoryTableHeader(strings.TrimSpace(ln)) {
-				skipping, removed = true, true
-				continue
-			}
-			skipping = false // a different table starts; keep it
-		}
-		if skipping {
-			continue // drop the memory table's body lines
-		}
-		out = append(out, ln)
+	root := map[string]any{}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&root); err != nil {
+		return err
 	}
-	if !removed {
+	permissions, ok := root["permissions"].(map[string]any)
+	if !ok {
 		return nil
 	}
-	text := strings.TrimRight(strings.Join(out, "\n"), "\n") + "\n"
-	return os.WriteFile(path, []byte(text), 0o644)
+	allow, ok := permissions["allow"].([]any)
+	if !ok {
+		return nil
+	}
+	kept := make([]any, 0, len(allow))
+	changed := false
+	for _, item := range allow {
+		if value, ok := item.(string); ok && value == "Mcp(memory:*)" {
+			changed = true
+			continue
+		}
+		kept = append(kept, item)
+	}
+	if !changed {
+		return nil
+	}
+	if len(kept) == 0 {
+		delete(permissions, "allow")
+	} else {
+		permissions["allow"] = kept
+	}
+	if deny, ok := permissions["deny"].([]any); ok && len(deny) == 0 {
+		delete(permissions, "deny")
+	}
+	if len(permissions) == 0 {
+		delete(root, "permissions")
+	}
+	if len(root) == 0 {
+		return os.Remove(path)
+	}
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeConfigFile(path, append(out, '\n'), 0o644)
+}
+
+func runConfigMutation(path string, mutate func(string) error) (bool, error) {
+	before, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if err := mutate(path); err != nil {
+		return false, err
+	}
+	after, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return !bytes.Equal(before, after), nil
+}
+
+// unmergeTOML removes the semantic mcp_servers.memory subtree using TOML AST
+// source ranges, so equivalent dotted, quoted, table, and inline spellings are
+// handled without reformatting unrelated user content.
+func unmergeTOML(path string, raw []byte) error {
+	if _, err := memoryCommandFromTOML(raw); err != nil {
+		return err
+	}
+	edits, err := tomlMemoryRemovalEdits(raw)
+	if err != nil {
+		return err
+	}
+	if len(edits) == 0 {
+		return nil
+	}
+	out, err := applyTextEdits(raw, edits)
+	if err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(out)) == 0 {
+		return os.Remove(path)
+	}
+	out = append(bytes.TrimRight(out, "\r\n"), '\n')
+	if err := toml.Unmarshal(out, &map[string]any{}); err != nil {
+		return fmt.Errorf("edited TOML is invalid: %w", err)
+	}
+	return writeConfigFile(path, out, 0o644)
 }
 
 // memoryPermissions are the permissions.allow entries that let Claude Code call
@@ -254,7 +428,7 @@ func mergeClaudeSettings(path, hookCommand string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(out, '\n'), 0o644)
+	return writeConfigFile(path, append(out, '\n'), 0o644)
 }
 
 // addToStringArray returns existing (coerced to a slice) with val appended unless
@@ -270,8 +444,8 @@ func addToStringArray(existing any, val string) []any {
 }
 
 // mergeSessionStartHook installs our sync hook into hooks.SessionStart, keeping
-// any hooks the user already has. If a sync-claude command is already present its
-// command is refreshed to the current one; otherwise a new entry is appended.
+// any hooks the user already has. If an old direct sync-claude command or the
+// launcher-based sync command is present, it is refreshed to the current one.
 func mergeSessionStartHook(existing any, command string) map[string]any {
 	hooks, _ := existing.(map[string]any)
 	if hooks == nil {
@@ -293,7 +467,7 @@ func mergeSessionStartHook(existing any, command string) map[string]any {
 			if !ok {
 				continue
 			}
-			if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "sync-claude") {
+			if cmd, ok := hm["command"].(string); ok && isClaudeSyncCommand(cmd) {
 				hm["command"] = command
 				found = true
 			}
@@ -308,6 +482,705 @@ func mergeSessionStartHook(existing any, command string) map[string]any {
 	}
 	hooks["SessionStart"] = ss
 	return hooks
+}
+
+// retargetMemoryConfig changes only an agent-parity-owned memory server
+// command. A user-provided memory server is deliberately left untouched.
+// The bool reports whether the file changed.
+func retargetMemoryConfig(path, command string) (bool, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".json":
+		return retargetJSON(path, raw, command)
+	case ".toml":
+		return retargetTOML(path, raw, command)
+	default:
+		return false, fmt.Errorf("unsupported config type: %s", path)
+	}
+}
+
+func isManagedMemoryCommand(command string) bool {
+	command = strings.TrimSpace(strings.ReplaceAll(command, `\`, "/"))
+	for _, managed := range []string{
+		".agents/mcp/memory/run.sh",
+		".agents/mcp/memory/run.cmd",
+		".agents/mcp/memory/dist/memory-mcp-linux-amd64",
+		".agents/mcp/memory/dist/memory-mcp-linux-arm64",
+		".agents/mcp/memory/dist/memory-mcp-darwin-amd64",
+		".agents/mcp/memory/dist/memory-mcp-darwin-arm64",
+		".agents/mcp/memory/dist/memory-mcp-windows-amd64.exe",
+	} {
+		if command == managed {
+			return true
+		}
+	}
+	return false
+}
+
+func retargetJSON(path string, raw []byte, command string) (bool, error) {
+	root := map[string]any{}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&root); err != nil {
+		return false, err
+	}
+	servers, ok := root["mcpServers"].(map[string]any)
+	if !ok {
+		return false, fmt.Errorf("mcpServers is not an object")
+	}
+	memory, ok := servers["memory"].(map[string]any)
+	if !ok {
+		return false, fmt.Errorf("memory server is not an object")
+	}
+	current, ok := memory["command"].(string)
+	if !ok {
+		return false, fmt.Errorf("memory server command is not a string")
+	}
+	if current == command {
+		return false, nil
+	}
+	if !isManagedMemoryCommand(current) {
+		return false, nil
+	}
+	memory["command"] = command
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	if err := writeConfigFile(path, append(out, '\n'), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func memoryCommandFromTOML(raw []byte) (string, error) {
+	var root struct {
+		MCPServers map[string]any `toml:"mcp_servers"`
+	}
+	if err := toml.Unmarshal(raw, &root); err != nil {
+		return "", err
+	}
+	memory, ok := root.MCPServers["memory"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("memory server is not a table")
+	}
+	command, ok := memory["command"].(string)
+	if !ok {
+		return "", fmt.Errorf("memory server command is not a string")
+	}
+	return command, nil
+}
+
+func retargetTOML(path string, raw []byte, command string) (bool, error) {
+	current, err := memoryCommandFromTOML(raw)
+	if err != nil {
+		return false, err
+	}
+	if current == command {
+		return false, nil
+	}
+	if !isManagedMemoryCommand(current) {
+		return false, nil
+	}
+
+	span, err := tomlMemoryCommandSpan(raw)
+	if err != nil {
+		return false, err
+	}
+	out, err := applyTextEdits(raw, []textEdit{{start: span.start, end: span.end, replacement: []byte(strconv.Quote(command))}})
+	if err != nil {
+		return false, err
+	}
+	var check map[string]any
+	if err := toml.Unmarshal(out, &check); err != nil {
+		return false, fmt.Errorf("edited TOML is invalid: %w", err)
+	}
+	if err := writeConfigFile(path, out, 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+type textEdit struct {
+	start       int
+	end         int
+	replacement []byte
+}
+
+type byteSpan struct {
+	start int
+	end   int
+}
+
+func applyTextEdits(raw []byte, edits []textEdit) ([]byte, error) {
+	sort.Slice(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
+	out := append([]byte(nil), raw...)
+	lastStart := len(raw)
+	for _, edit := range edits {
+		if edit.start < 0 || edit.end < edit.start || edit.end > len(raw) || edit.end > lastStart {
+			return nil, fmt.Errorf("overlapping or invalid config edit %d:%d", edit.start, edit.end)
+		}
+		out = append(append(append([]byte(nil), out[:edit.start]...), edit.replacement...), out[edit.end:]...)
+		lastStart = edit.start
+	}
+	return out, nil
+}
+
+func nodeKeys(node *unstable.Node) []string {
+	var keys []string
+	it := node.Key()
+	for it.Next() {
+		keys = append(keys, string(it.Node().Data))
+	}
+	return keys
+}
+
+func hasPathPrefix(path, prefix []string) bool {
+	if len(path) < len(prefix) {
+		return false
+	}
+	for i := range prefix {
+		if path[i] != prefix[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func samePath(a, b []string) bool {
+	return len(a) == len(b) && hasPathPrefix(a, b)
+}
+
+func nodeBounds(node *unstable.Node) (byteSpan, bool) {
+	start, end, found := 0, 0, false
+	var visit func(*unstable.Node)
+	visit = func(current *unstable.Node) {
+		if current == nil {
+			return
+		}
+		if current.Raw.Length > 0 {
+			s := int(current.Raw.Offset)
+			e := s + int(current.Raw.Length)
+			if !found || s < start {
+				start = s
+			}
+			if !found || e > end {
+				end = e
+			}
+			found = true
+		}
+		children := current.Children()
+		for children.Next() {
+			visit(children.Node())
+		}
+	}
+	visit(node)
+	return byteSpan{start: start, end: end}, found
+}
+
+func lineBounds(raw []byte, span byteSpan) byteSpan {
+	for span.start > 0 && raw[span.start-1] != '\n' {
+		span.start--
+	}
+	for span.end < len(raw) && raw[span.end] != '\n' {
+		span.end++
+	}
+	if span.end < len(raw) {
+		span.end++
+	}
+	return span
+}
+
+func inlineEntryBounds(raw []byte, node *unstable.Node, container *unstable.Node) (byteSpan, error) {
+	span, ok := nodeBounds(node)
+	if !ok {
+		return byteSpan{}, fmt.Errorf("TOML inline memory entry has no source range")
+	}
+	outer, ok := nodeBounds(container)
+	if !ok {
+		return byteSpan{}, fmt.Errorf("TOML inline table has no source range")
+	}
+	end := span.end
+	for end < outer.end && (raw[end] == ' ' || raw[end] == '\t' || raw[end] == '\r' || raw[end] == '\n') {
+		end++
+	}
+	if end < outer.end && raw[end] == ',' {
+		end++
+		for end < outer.end && (raw[end] == ' ' || raw[end] == '\t') {
+			end++
+		}
+		return byteSpan{start: span.start, end: end}, nil
+	}
+	start := span.start
+	for start > outer.start && (raw[start-1] == ' ' || raw[start-1] == '\t' || raw[start-1] == '\r' || raw[start-1] == '\n') {
+		start--
+	}
+	if start > outer.start && raw[start-1] == ',' {
+		start--
+	}
+	return byteSpan{start: start, end: span.end}, nil
+}
+
+func walkInlineKeyValues(node *unstable.Node, prefix []string, visit func(*unstable.Node, *unstable.Node, []string) bool) bool {
+	if node == nil || node.Kind != unstable.InlineTable {
+		return false
+	}
+	it := node.Children()
+	for it.Next() {
+		child := it.Node()
+		if child.Kind != unstable.KeyValue {
+			continue
+		}
+		path := append(append([]string(nil), prefix...), nodeKeys(child)...)
+		if visit(child, node, path) {
+			return true
+		}
+		if walkInlineKeyValues(child.Value(), path, visit) {
+			return true
+		}
+	}
+	return false
+}
+
+func parseTOMLExpressions(raw []byte, visit func(*unstable.Parser, *unstable.Node, []string) error) error {
+	p := &unstable.Parser{KeepComments: true}
+	p.Reset(raw)
+	var table []string
+	for p.NextExpression() {
+		expr := p.Expression()
+		switch expr.Kind {
+		case unstable.Table, unstable.ArrayTable:
+			table = nodeKeys(expr)
+			if err := visit(p, expr, append([]string(nil), table...)); err != nil {
+				return err
+			}
+		case unstable.KeyValue:
+			path := append(append([]string(nil), table...), nodeKeys(expr)...)
+			if err := visit(p, expr, path); err != nil {
+				return err
+			}
+		}
+	}
+	return p.Error()
+}
+
+func tomlMemoryCommandSpan(raw []byte) (byteSpan, error) {
+	target := []string{"mcp_servers", "memory", "command"}
+	var found *byteSpan
+	err := parseTOMLExpressions(raw, func(_ *unstable.Parser, expr *unstable.Node, path []string) error {
+		if expr.Kind != unstable.KeyValue {
+			return nil
+		}
+		if samePath(path, target) && expr.Value().Kind == unstable.String {
+			span := byteSpan{start: int(expr.Value().Raw.Offset), end: int(expr.Value().Raw.Offset + expr.Value().Raw.Length)}
+			found = &span
+			return nil
+		}
+		walkInlineKeyValues(expr.Value(), path, func(child, _ *unstable.Node, childPath []string) bool {
+			if samePath(childPath, target) && child.Value().Kind == unstable.String {
+				span := byteSpan{start: int(child.Value().Raw.Offset), end: int(child.Value().Raw.Offset + child.Value().Raw.Length)}
+				found = &span
+				return true
+			}
+			return false
+		})
+		return nil
+	})
+	if err != nil {
+		return byteSpan{}, err
+	}
+	if found == nil {
+		return byteSpan{}, fmt.Errorf("mcp_servers.memory.command was parsed but its source value was not found")
+	}
+	return *found, nil
+}
+
+func tomlMemoryRemovalEdits(raw []byte) ([]textEdit, error) {
+	target := []string{"mcp_servers", "memory"}
+	var edits []textEdit
+	err := parseTOMLExpressions(raw, func(_ *unstable.Parser, expr *unstable.Node, path []string) error {
+		if hasPathPrefix(path, target) {
+			span, ok := nodeBounds(expr)
+			if !ok {
+				return fmt.Errorf("TOML memory expression has no source range")
+			}
+			span = lineBounds(raw, span)
+			edits = append(edits, textEdit{start: span.start, end: span.end})
+			return nil
+		}
+		if expr.Kind != unstable.KeyValue {
+			return nil
+		}
+		var nested *byteSpan
+		var nestedErr error
+		walkInlineKeyValues(expr.Value(), path, func(child, container *unstable.Node, childPath []string) bool {
+			if samePath(childPath, target) {
+				span, err := inlineEntryBounds(raw, child, container)
+				if err != nil {
+					nestedErr = err
+				} else {
+					nested = &span
+				}
+				return true
+			}
+			return false
+		})
+		if nestedErr != nil {
+			return nestedErr
+		}
+		if nested != nil {
+			edits = append(edits, textEdit{start: nested.start, end: nested.end})
+		}
+		return nil
+	})
+	return edits, err
+}
+
+func isClaudeSyncCommand(command string) bool {
+	normalized := strings.TrimSpace(strings.ReplaceAll(command, `\`, "/"))
+	for _, managed := range []string{
+		`bash "$CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.sh" sync`,
+		`powershell -NoProfile -ExecutionPolicy Bypass -Command "& \"$env:CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.ps1\" sync"`,
+		`.agents/bin/agent-parity sync-claude`,
+	} {
+		if normalized == managed {
+			return true
+		}
+	}
+	return false
+}
+
+func isSelfHealCommand(command string, managed ...string) bool {
+	normalized := strings.TrimSpace(strings.ReplaceAll(command, `\`, "/"))
+	for _, candidate := range managed {
+		if candidate != "" && normalized == strings.TrimSpace(strings.ReplaceAll(candidate, `\`, "/")) {
+			return true
+		}
+	}
+	return false
+}
+
+func readJSONObject(path string) (map[string]any, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	root := map[string]any{}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&root); err != nil {
+		return nil, err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("multiple JSON values")
+		}
+		return nil, err
+	}
+	return root, nil
+}
+
+// hasClaudeSyncHook checks the actual Claude SessionStart hook path and exact
+// command. An occurrence in any unrelated JSON field is deliberately ignored.
+func hasClaudeSyncHook(path, command string) (bool, error) {
+	root, err := readJSONObject(path)
+	if err != nil {
+		return false, err
+	}
+	hooks, _ := root["hooks"].(map[string]any)
+	groups, _ := hooks["SessionStart"].([]any)
+	for _, group := range groups {
+		gm, _ := group.(map[string]any)
+		handlers, _ := gm["hooks"].([]any)
+		for _, handler := range handlers {
+			hm, _ := handler.(map[string]any)
+			if hm["type"] == "command" && hm["command"] == command {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// hasAgentHook checks only the event/container defined for the named agent.
+// For Codex both platform commands must be present because its hook format
+// stores Unix and Windows commands together.
+func hasAgentHook(path, kind string) (bool, error) {
+	spec, err := hookSpec(kind)
+	if err != nil {
+		return false, err
+	}
+	root, err := readJSONObject(path)
+	if err != nil {
+		return false, err
+	}
+	if spec.nested {
+		hooks, _ := root["hooks"].(map[string]any)
+		groups, _ := hooks[spec.event].([]any)
+		for _, group := range groups {
+			gm, _ := group.(map[string]any)
+			handlers, _ := gm["hooks"].([]any)
+			for _, handler := range handlers {
+				hm, _ := handler.(map[string]any)
+				if hm["type"] != "command" || hm["command"] != spec.command {
+					continue
+				}
+				if spec.commandWindows != "" && hm["commandWindows"] != spec.commandWindows {
+					continue
+				}
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	container := root
+	if kind == "cursor" {
+		container, _ = root["hooks"].(map[string]any)
+	}
+	handlers, _ := container[spec.event].([]any)
+	for _, handler := range handlers {
+		hm, _ := handler.(map[string]any)
+		if hm["command"] == spec.command {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func hasCursorCLIAllowlist(path string) (bool, error) {
+	root, err := readJSONObject(path)
+	if err != nil {
+		return false, err
+	}
+	permissions, _ := root["permissions"].(map[string]any)
+	allow, _ := permissions["allow"].([]any)
+	for _, item := range allow {
+		if item == "Mcp(memory:*)" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+type agentHookSpec struct {
+	event          string
+	command        string
+	commandWindows string
+	nested         bool
+}
+
+// hookSpec is the single registry for agent-specific hook syntax. Hook merge
+// and removal operate on this description instead of selecting agents again.
+func hookSpec(kind string) (agentHookSpec, error) {
+	switch kind {
+	case "claude":
+		return agentHookSpec{
+			event: "SessionStart", command: `.agents/bin/agent-parity self-heal`, nested: true,
+		}, nil
+	case "codex":
+		return agentHookSpec{
+			event: "SessionStart", nested: true,
+			command:        `sh -c 'root=$(git rev-parse --show-toplevel) && exec "$root/.agents/bin/agent-parity" self-heal'`,
+			commandWindows: `powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) '.agents/bin/agent-parity.cmd') self-heal"`,
+		}, nil
+	case "cursor":
+		return agentHookSpec{event: "sessionStart", command: ".agents/bin/agent-parity.cmd self-heal"}, nil
+	case "antigravity":
+		return agentHookSpec{event: "PreInvocation", command: ".agents/bin/agent-parity.cmd self-heal"}, nil
+	default:
+		return agentHookSpec{}, fmt.Errorf("unsupported hook kind: %s", kind)
+	}
+}
+
+// mergeAgentHook installs or refreshes only agent-parity's self-heal handler,
+// preserving every user-defined hook in the same file.
+func mergeAgentHook(path, kind, command, commandWindows string) error {
+	spec, err := hookSpec(kind)
+	if err != nil {
+		return err
+	}
+	if command == "" {
+		command = spec.command
+		commandWindows = spec.commandWindows
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	root := map[string]any{}
+	if len(bytes.TrimSpace(raw)) > 0 {
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		if err := dec.Decode(&root); err != nil {
+			return err
+		}
+	}
+
+	if spec.nested {
+		hooks, _ := root["hooks"].(map[string]any)
+		if hooks == nil {
+			hooks = map[string]any{}
+		}
+		groups, _ := hooks[spec.event].([]any)
+		found := false
+		for _, group := range groups {
+			gm, _ := group.(map[string]any)
+			handlers, _ := gm["hooks"].([]any)
+			for _, handler := range handlers {
+				hm, _ := handler.(map[string]any)
+				old, _ := hm["command"].(string)
+				if !isSelfHealCommand(old, command, commandWindows) {
+					continue
+				}
+				hm["type"] = "command"
+				hm["command"] = command
+				hm["timeout"] = 30
+				if kind == "codex" {
+					hm["commandWindows"] = commandWindows
+					hm["statusMessage"] = "Checking agent-parity MCP wiring"
+				}
+				found = true
+			}
+		}
+		if !found {
+			handler := map[string]any{"type": "command", "command": command, "timeout": 30}
+			if kind == "codex" {
+				handler["commandWindows"] = commandWindows
+				handler["statusMessage"] = "Checking agent-parity MCP wiring"
+			}
+			groups = append(groups, map[string]any{"hooks": []any{handler}})
+		}
+		hooks[spec.event] = groups
+		root["hooks"] = hooks
+	} else {
+		if kind == "cursor" {
+			if _, exists := root["version"]; !exists {
+				root["version"] = json.Number("1")
+			}
+		}
+		if kind == "antigravity" {
+			if _, exists := root["enabled"]; !exists {
+				root["enabled"] = true
+			}
+		}
+		container := root
+		if kind == "cursor" {
+			hooks, _ := root["hooks"].(map[string]any)
+			if hooks == nil {
+				hooks = map[string]any{}
+			}
+			root["hooks"] = hooks
+			container = hooks
+		}
+		handlers, _ := container[spec.event].([]any)
+		found := false
+		for _, handler := range handlers {
+			hm, _ := handler.(map[string]any)
+			old, _ := hm["command"].(string)
+			if isSelfHealCommand(old, command, commandWindows) {
+				hm["command"] = command
+				hm["timeout"] = 30
+				found = true
+			}
+		}
+		if !found {
+			handlers = append(handlers, map[string]any{"command": command, "timeout": 30})
+		}
+		container[spec.event] = handlers
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeConfigFile(path, append(out, '\n'), 0o644)
+}
+
+func unmergeAgentHook(path, kind string) error {
+	spec, err := hookSpec(kind)
+	if err != nil {
+		return err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	root := map[string]any{}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&root); err != nil {
+		return err
+	}
+	if spec.nested {
+		hooks, _ := root["hooks"].(map[string]any)
+		groups, _ := hooks[spec.event].([]any)
+		keptGroups := []any{}
+		for _, group := range groups {
+			gm, _ := group.(map[string]any)
+			handlers, _ := gm["hooks"].([]any)
+			kept := []any{}
+			for _, handler := range handlers {
+				hm, _ := handler.(map[string]any)
+				cmd, _ := hm["command"].(string)
+				if !isSelfHealCommand(cmd, spec.command, spec.commandWindows) {
+					kept = append(kept, handler)
+				}
+			}
+			if len(kept) > 0 {
+				gm["hooks"] = kept
+				keptGroups = append(keptGroups, group)
+			}
+		}
+		if len(keptGroups) == 0 {
+			delete(hooks, spec.event)
+		} else {
+			hooks[spec.event] = keptGroups
+		}
+		if len(hooks) == 0 {
+			delete(root, "hooks")
+		}
+	} else {
+		container := root
+		if kind == "cursor" {
+			container, _ = root["hooks"].(map[string]any)
+		}
+		handlers, _ := container[spec.event].([]any)
+		kept := []any{}
+		for _, handler := range handlers {
+			hm, _ := handler.(map[string]any)
+			cmd, _ := hm["command"].(string)
+			if !isSelfHealCommand(cmd, spec.command, spec.commandWindows) {
+				kept = append(kept, handler)
+			}
+		}
+		if len(kept) == 0 {
+			delete(container, spec.event)
+		} else {
+			container[spec.event] = kept
+		}
+		if kind == "cursor" && len(container) == 0 {
+			delete(root, "hooks")
+		}
+	}
+	if len(root) == 0 ||
+		(kind == "cursor" && len(root) == 1 && root["version"] == json.Number("1")) ||
+		(kind == "antigravity" && len(root) == 1 && root["enabled"] == true) {
+		return os.Remove(path)
+	}
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeConfigFile(path, append(out, '\n'), 0o644)
 }
 
 // unmergeClaudeSettings removes the keys mergeClaudeSettings added — the
@@ -373,7 +1246,7 @@ func unmergeClaudeSettings(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(out, '\n'), 0o644)
+	return writeConfigFile(path, append(out, '\n'), 0o644)
 }
 
 // removeStrings returns existing (coerced to a slice) with every element equal to
@@ -394,9 +1267,10 @@ func removeStrings(existing any, vals []string) []any {
 	return out
 }
 
-// removeSyncHook drops our sync-claude entries from a SessionStart list, keeping
-// any other hooks the user registered. An entry whose every hook was ours is
-// removed entirely; one that mixed ours with theirs keeps only theirs.
+// removeSyncHook drops our direct or launcher-based sync entries from a
+// SessionStart list, keeping any other hooks the user registered. An entry whose
+// every hook was ours is removed entirely; one that mixed ours with theirs keeps
+// only theirs.
 func removeSyncHook(existing any) []any {
 	ss, _ := existing.([]any)
 	out := []any{}
@@ -414,7 +1288,7 @@ func removeSyncHook(existing any) []any {
 		kept := []any{}
 		for _, h := range inner {
 			if hm, ok := h.(map[string]any); ok {
-				if cmd, ok := hm["command"].(string); ok && strings.Contains(cmd, "sync-claude") {
+				if cmd, ok := hm["command"].(string); ok && isClaudeSyncCommand(cmd) {
 					continue
 				}
 			}

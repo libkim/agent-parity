@@ -26,9 +26,15 @@ for t in $TARGETS; do
   # static no-interpreter binary never invokes it. (A PIE build would instead
   # request /lib/ld-linux-aarch64.so.1, which Termux lacks.)
   CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
+    go build -buildvcs=false -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
     -o "${OUT}/${APP}-${os}-${arch}${ext}" .
+  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+    go build -tags configeditor -buildvcs=false -trimpath -ldflags="-s -w" \
+    -o "${OUT}/agent-parity-config-${os}-${arch}${ext}" .
 done
+
+# The launchers verify every downloaded release binary before caching it.
+(cd "$OUT" && sha256sum memory-mcp-* agent-parity-config-* | LC_ALL=C sort -k2 > checksums.txt)
 
 echo "done -> ${OUT}/"
 ls -lh "$OUT"
