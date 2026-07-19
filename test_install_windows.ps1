@@ -64,6 +64,7 @@ try {
   } finally {
     Pop-Location
   }
+  if ($LASTEXITCODE -ne 0) { throw "successful install leaked native exit code $LASTEXITCODE" }
 
   $installedVersion = [IO.File]::ReadAllText((Join-Path $testRoot ".agents\mcp\memory\VERSION")).Trim()
   if ($installedVersion -ne $Version) { throw "installed version is $installedVersion, expected $Version" }
@@ -90,6 +91,7 @@ try {
   } finally {
     Pop-Location
   }
+  if ($LASTEXITCODE -ne 0) { throw "successful update leaked native exit code $LASTEXITCODE" }
   if ([IO.File]::ReadAllText($statusPath) -eq "stale") { throw "update did not refresh local management scripts" }
 
   $allowDownloads = $false

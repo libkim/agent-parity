@@ -296,16 +296,25 @@ function Reg-AgentHooks {
 
 
 function Test-GitRepo {
+  $isRepo = $false
   try {
     & git -C $Target rev-parse --is-inside-work-tree *> $null
-    return $LASTEXITCODE -eq 0
-  } catch { return $false }
+    $isRepo = $LASTEXITCODE -eq 0
+  } catch {
+    $isRepo = $false
+  } finally {
+    # A missing repo is an expected probe result, not this script's exit code.
+    $global:LASTEXITCODE = 0
+  }
+  return $isRepo
 }
 
 function Test-Ignored([string]$Rel) {
   if (!(Test-GitRepo)) { return $false }
   & git -C $Target check-ignore -q -- (To-GitPath $Rel) *> $null
-  return $LASTEXITCODE -eq 0
+  $isIgnored = $LASTEXITCODE -eq 0
+  $global:LASTEXITCODE = 0
+  return $isIgnored
 }
 
 function Get-ManagedBlockState([string]$Text, [string]$Begin, [string]$End) {
