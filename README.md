@@ -18,9 +18,16 @@ the same skills and instructions (`AGENTS.md`).
 
 ## Features
 
-- **Dependency-free** — runs as a single static binary; no Go, Node, or other runtime to install.
-- **Non-invasive** — creates only project-scoped files; never touches global settings.
-- **Zero-install** — commit it once and any machine that pulls the repo uses it right away, no reinstall.
+- **Runtime-free** — uses two static native executables: `memory-mcp` serves
+  memory, while `agent-parity-config` safely edits JSON/TOML; no Go, Node, or
+  Python runtime is required.
+- **Project-scoped configuration** — changes project settings only and never
+  edits global agent settings. Release executables live in a per-user cache
+  shared across projects.
+- **Repository-portable** — commits the wiring, release metadata, memory, and
+  skills. The MCP server downloads on first use; on a fresh machine, run
+  install/update once to provision the local config editor used by management
+  commands and self-heal.
 
 ## Supported agents (tested 2026-07-10)
 
@@ -49,42 +56,21 @@ session.
 Linux/macOS/WSL:
 
 ```sh
-(
-  repo=libkim/agent-parity
-  latest=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest")
-  tag=${latest##*/}
-  case "$tag" in v*) ;; *) echo "could not resolve latest agent-parity release" >&2; exit 1 ;; esac
-  export AGENT_PARITY_RAW="https://raw.githubusercontent.com/$repo/$tag"
-  export AGENT_PARITY_RELEASE="https://github.com/$repo/releases/download/$tag"
-  export AGENT_PARITY_VERSION="$tag"
-  installer=$(mktemp "${TMPDIR:-/tmp}/agent-parity-install.XXXXXX")
-  trap 'rm -f "$installer"' EXIT HUP INT TERM
-  curl -fsSL "$AGENT_PARITY_RAW/install.sh" -o "$installer"
-  sh "$installer" install
-)
+curl -fsSL https://github.com/libkim/agent-parity/releases/latest/download/install.sh | sh
 ```
 
 Native Windows PowerShell:
 
 ```powershell
-$repo = "libkim/agent-parity"
-$tag = (irm "https://api.github.com/repos/$repo/releases/latest").tag_name
-if ($tag -notmatch '^v') { throw "could not resolve latest agent-parity release" }
-$oldRaw, $oldRelease, $oldVersion = $env:AGENT_PARITY_RAW, $env:AGENT_PARITY_RELEASE, $env:AGENT_PARITY_VERSION
-try {
-  $env:AGENT_PARITY_RAW = "https://raw.githubusercontent.com/$repo/$tag"
-  $env:AGENT_PARITY_RELEASE = "https://github.com/$repo/releases/download/$tag"
-  $env:AGENT_PARITY_VERSION = $tag
-  irm "$env:AGENT_PARITY_RAW/install.ps1" | iex
-} finally {
-  $env:AGENT_PARITY_RAW, $env:AGENT_PARITY_RELEASE, $env:AGENT_PARITY_VERSION = $oldRaw, $oldRelease, $oldVersion
-}
+irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 | iex
 ```
 
 ### Adopting an existing setup
 
 Installing on a project that already runs a memory server, shared skills, or its
-own instructions leaves your existing files in place and makes no assumptions:
+own instructions preserves existing content and makes no assumptions. Existing
+per-agent skills may be relocated into the shared skill source as described
+below.
 
 - A config that already lists other MCP servers gets agent-parity's
   memory-server entry added and the rest preserved. If a `memory` entry already
@@ -118,7 +104,7 @@ the right invocation for your OS.
 | `status` | Checks the project files and the locally available agent CLIs. |
 | `version` | Reports the installed and latest version. |
 | `update` | Re-applies everything at the latest release — pinned runtime metadata, launchers, registrations, skills wiring, Claude settings, and marker blocks. |
-| `uninstall` | Removes the installed artifacts. Add `--purge` to delete the memory store as well. |
+| `uninstall` | Removes project wiring while leaving the shared executable cache and, by default, the memory store. Add `--purge` to delete the memory store as well. |
 
 You can also run them directly from the project root:
 `./.agents/bin/agent-parity <command>` on Linux/macOS/WSL, or
@@ -147,7 +133,7 @@ whether that session currently exposes the memory tools.
 |  | `config missing` | The agent config file is absent. |
 |  | `not registered` | The config file exists but has no usable entry for this install. |
 | `agent-specific diagnostics` | CLI found / not found, registration result | Extra checks offered by the installed agent CLI. These are not a check of the current agent session's tool visibility. |
-| `self-heal hooks` | `registered` / `missing` | Whether Claude, Codex, Cursor, and Antigravity can retarget the memory launcher at session start. Codex requires the project hook to be reviewed and trusted. |
+| `self-heal hooks` | `registered` / `missing` | Whether each agent's lifecycle hook can retarget the memory launcher. Claude and Codex use `SessionStart`, Cursor uses `sessionStart`, and Antigravity uses `PreInvocation`. Codex requires the project hook to be reviewed and trusted. |
 | `skills` | `<n> in .agents/skills; sync script present` | Shared skill source and Claude sync script are installed. |
 |  | `sync wiring missing` | The Claude skill-sync script is absent. |
 | `hook` | `registered` / `missing` | Whether Claude's session-start hook will sync skills into `.claude/skills`. |
@@ -171,17 +157,20 @@ The portable wiring, release metadata, memory, and skills are committed to the
 repo; MCP binaries are not. On first use, `run.sh` / `run.cmd` downloads only
 the current platform's binary from the project's pinned release, verifies it
 against `checksums.txt`, and stores it in a per-user cache shared by projects.
-Install/update also places the current platform's small `agent-parity-config`
-editor in that shared cache. Local management commands use it to parse and
-edit JSON/TOML without starting the MCP server or downloading anything during
-the command.
+Install/update also places the current platform's `agent-parity-config` editor
+in that shared cache. Configuration-related management commands and self-heal
+use it to parse and edit JSON/TOML without starting or downloading the MCP
+server. `status` and `version` make only a bounded network request for the
+latest-release field.
 The default cache is `$XDG_CACHE_HOME/agent-parity` (or
 `~/.cache/agent-parity`) on Unix and `%LOCALAPPDATA%\agent-parity\cache` on
 Windows; `AGENT_PARITY_CACHE` overrides it. `uninstall` leaves this shared
-cache alone. `.claude/` is generated per session from `.agents/` and stays out
-of git. If the project's `.gitignore` would hide the tracked wiring, `install`
-maintains a marker block and `uninstall` reverts it. Git is optional — it only
-matters for sharing across machines or teammates.
+cache alone. Claude artifacts are generated from `.agents/`: `.claude/skills/`
+is ignored, while the generated `.claude/settings.json` is committed so a
+fresh pull already contains the hooks needed to regenerate it. If the project's
+`.gitignore` would hide the tracked wiring, `install` maintains a marker block
+and `uninstall` reverts it. Git is optional — it only matters for sharing across
+machines or teammates.
 
 agent-parity handles your content and its own wiring differently. In the agent
 configs and Claude settings it merges only its own entries, so your other
@@ -199,15 +188,16 @@ the shared folder — keeps its skills without the sync.
 
 ### Cross-OS self-heal
 
-The committed MCP configs point to either `run.sh` or `run.cmd`. At session
-start, the managed hooks inspect all four configs and change only an
-agent-parity-owned `memory` command to the launcher for the current OS. A
-user-supplied `memory` server is never overwritten. When a file changes, the
-hook asks you to restart the current agent session because MCP tools were
-loaded before the repair; an unchanged run is silent. The repair uses only the
-installed local script; it never downloads or starts
-the MCP server binary. Codex project hooks must be reviewed and trusted with
-`/hooks` (or the Hooks UI) before they run.
+The committed MCP configs point to either `run.sh` or `run.cmd`. Managed
+lifecycle hooks inspect all four configs and change only an agent-parity-owned
+`memory` command to the launcher for the current OS. Claude and Codex run this
+at `SessionStart`, Cursor at `sessionStart`, and Antigravity at
+`PreInvocation`. A user-supplied `memory` server is never overwritten. When a
+file changes, the hook asks you to restart the current agent session because
+MCP tools may already have loaded before the repair; an unchanged run is
+silent. The repair uses only the installed local script and config editor; it
+never downloads or starts the MCP server binary. Codex project hooks must be
+reviewed and trusted with `/hooks` (or the Hooks UI) before they run.
 
 ### Memory
 
@@ -244,6 +234,8 @@ local.
 | `.agents/scripts/sync-claude.{sh,ps1}` | sync script that mirrors skills into `.claude` |
 | `.agents/scripts/self-heal.{sh,ps1}` | retargets managed MCP registrations to the current OS launcher |
 | `.agents/claude/settings.json` | Claude settings source with the platform-neutral sync hook |
+| `.claude/settings.json` | generated Claude settings bootstrap; committed and refreshed from `.agents/claude/settings.json` |
+| `.claude/skills/` | generated Claude skill mirror; ignored by Git and refreshed at session start |
 | `.agents/mcp_config.json` | memory server registered for Antigravity CLI |
 | `.agents/hooks.json` | Antigravity self-heal hook |
 | `.mcp.json` | memory server registered for Claude Code |
@@ -254,16 +246,18 @@ local.
 | `.codex/hooks.json` | Codex session-start self-heal hook (requires trust) |
 | `AGENTS.md` | instruction block, delimited by markers |
 | `CLAUDE.md` | `@AGENTS.md` import wrapper |
+| `.gitignore` | managed marker block when exclusions would hide installed wiring or generated Claude files |
 
 `install.sh` / `install.ps1` are remote install-only entrypoints. For
-`agent-parity update`, the project launcher resolves the latest release and
-runs that release's remote `update.sh` / `update.ps1`; no updater is kept in
-`.agents/scripts`.
+`agent-parity update`, the project launcher downloads the latest release's
+version-stamped `update.sh` / `update.ps1` asset. That embedded version selects
+the matching Raw templates and config-editor asset; it also pins the MCP
+launcher metadata to that release. No updater is kept in `.agents/scripts`.
 
 `uninstall` is fully offline and never starts the MCP launcher. Native Windows
-uses PowerShell's JSON support; the Unix command uses the verified
-`agent-parity-config` editor installed in the shared cache. Neither path needs
-Python or another user-installed runtime.
+and Unix both use the verified `agent-parity-config` editor installed in the
+shared cache for structured JSON/TOML changes. Neither path needs Python or
+another user-installed runtime.
 
 ## License
 

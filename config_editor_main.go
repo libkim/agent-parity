@@ -8,7 +8,7 @@ import (
 )
 
 func configEditorUsage() {
-	fmt.Fprintln(os.Stderr, "usage: agent-parity-config <ensure|command|has|has-sync-hook|has-agent-hook|has-cursor-cli|unmerge|unmerge-hook|unmerge-claude-settings|unmerge-cursor-cli> <config> [value]")
+	fmt.Fprintln(os.Stderr, "usage: agent-parity-config <ensure|command|has|merge-hook|merge-claude-settings|merge-cursor-cli|has-sync-hook|has-agent-hook|has-cursor-cli|unmerge|unmerge-hook|unmerge-claude-settings|unmerge-cursor-cli> <config> [value]")
 	os.Exit(2)
 }
 
@@ -92,6 +92,36 @@ func main() {
 		}
 		if !exists {
 			os.Exit(1)
+		}
+	case "merge-hook":
+		if len(os.Args) != 4 {
+			configEditorUsage()
+		}
+		if err := mergeAgentHook(path, os.Args[3], "", ""); err != nil {
+			fmt.Fprintln(os.Stderr, "merge-hook:", err)
+			os.Exit(2)
+		}
+	case "merge-claude-settings":
+		if len(os.Args) != 4 {
+			configEditorUsage()
+		}
+		if err := mergeClaudeSettings(path, os.Args[3]); err != nil {
+			fmt.Fprintln(os.Stderr, "merge-claude-settings:", err)
+			os.Exit(2)
+		}
+	case "merge-cursor-cli":
+		if len(os.Args) != 3 {
+			configEditorUsage()
+		}
+		changed, err := mergeCursorCLI(path)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "merge-cursor-cli:", err)
+			os.Exit(2)
+		}
+		if changed {
+			fmt.Println("changed")
+		} else {
+			fmt.Println("unchanged")
 		}
 	case "unmerge":
 		if len(os.Args) != 3 {

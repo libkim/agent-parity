@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  test-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,9 +17,113 @@ jobs:
           go-version: "1.25"
       - run: go test ./...
       - run: go test -tags configeditor ./...
-      - run: ./build.sh
+      - run: bash build.sh
         env:
           VERSION: ${{ github.ref_name }}
+      - run: sh test_release_assets.sh "${{ github.ref_name }}"
+      - run: sh test_markers.sh
+      - run: sh test_uninstall.sh
+      - run: sh test_install_markers.sh
+      - run: sh test_readme_install.sh "${{ github.ref_name }}"
+
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - shell: bash
+        run: |
+          go test ./...
+          go test -tags configeditor ./...
+          VERSION="${{ github.ref_name }}" bash build.sh
+      - shell: powershell
+        run: .\test_powershell_syntax.ps1
+      - shell: powershell
+        run: .\test_atomic_write.ps1
+      - shell: powershell
+        run: .\test_markers.ps1
+      - shell: powershell
+        run: .\test_claude_wrapper.ps1
+      - shell: powershell
+        run: .\test_install_windows.ps1 "${{ github.ref_name }}"
+      - shell: bash
+        run: sh test_git_bash.sh
+
+  release:
+    needs: [test-linux, test-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: bash build.sh
+        env:
+          VERSION: ${{ github.ref_name }}
+      - run: sh test_release_assets.sh "${{ github.ref_name }}"
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+
+  smoke-linux:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for latest install asset
+        run: |
+          for attempt in $(seq 1 12); do
+            if curl -fsSL https://github.com/libkim/agent-parity/releases/latest/download/install.sh -o install.sh \
+              && grep -qxF 'PACKAGED_VERSION="${{ github.ref_name }}"' install.sh; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+      - name: Run README install command
+        run: |
+          target=$(mktemp -d)
+          cd "$target"
+          curl -fsSL https://github.com/libkim/agent-parity/releases/latest/download/install.sh | sh
+          test "$(tr -d '\r\n' < .agents/mcp/memory/VERSION)" = "${{ github.ref_name }}"
+
+  smoke-windows:
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - name: Wait for latest install asset
+        shell: powershell
+        run: |
+          $url = "https://github.com/libkim/agent-parity/releases/latest/download/install.ps1"
+          $expected = '$PackagedVersion = "${{ github.ref_name }}"'
+          for ($attempt = 1; $attempt -le 12; $attempt++) {
+            try {
+              $source = [string](Invoke-RestMethod -Uri $url)
+              if (($source -split "`r?`n") -contains $expected) { exit 0 }
+            } catch {}
+            Start-Sleep -Seconds 5
+          }
+          exit 1
+      - name: Run README install command
+        shell: powershell
+        run: |
+          $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+          $target = Join-Path $tempBase ("agent-parity-release-smoke-" + [Guid]::NewGuid().ToString("N"))
+          New-Item -ItemType Directory -Path $target | Out-Null
+          $target = (Resolve-Path -LiteralPath $target).Path
+          if (!$target.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase)) { throw "unsafe smoke path" }
+          try {
+            Push-Location -LiteralPath $target
+            try {
+              irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 | iex
+            } finally {
+              Pop-Location
+            }
+            $installed = [IO.File]::ReadAllText((Join-Path $target ".agents\mcp\memory\VERSION")).Trim()
+            if ($installed -ne "${{ github.ref_name }}") { throw "installed $installed" }
+          } finally {
+            if ($target.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase)) {
+              Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }

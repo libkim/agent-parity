@@ -1,6 +1,9 @@
+//go:build configeditor
+
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -196,6 +199,85 @@ func TestUnmergeCursorCLIPreservesUserSettings(t *testing.T) {
 	}
 	if !hasStr(permissions["deny"], "Shell(rm:*)") {
 		t.Fatal("deny list was lost")
+	}
+}
+
+func TestMergeCursorCLIPreservesUserSettingsAndIsIdempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".cursor", "cli.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	original := `{"theme":"dark","permissions":{"allow":["Shell(git:*)"],"deny":["Shell(rm:*)"]}}`
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	changed, err := mergeCursorCLI(path)
+	if err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	root := readSettings(t, path)
+	if root["theme"] != "dark" {
+		t.Fatal("user setting was lost")
+	}
+	permissions := root["permissions"].(map[string]any)
+	if !hasStr(permissions["allow"], "Shell(git:*)") || !hasStr(permissions["allow"], cursorCLIMemoryPermission) {
+		t.Fatalf("allowlist was not merged: %#v", permissions["allow"])
+	}
+	if !hasStr(permissions["deny"], "Shell(rm:*)") {
+		t.Fatal("deny list was lost")
+	}
+
+	first, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err = mergeCursorCLI(path)
+	if err != nil || changed {
+		t.Fatalf("second merge changed=%v err=%v", changed, err)
+	}
+	second, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatal("idempotent merge rewrote the file")
+	}
+}
+
+func TestMergeCursorCLICreatesMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".cursor", "cli.json")
+	changed, err := mergeCursorCLI(path)
+	if err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	has, err := hasCursorCLIAllowlist(path)
+	if err != nil || !has {
+		t.Fatalf("created allowlist has=%v err=%v", has, err)
+	}
+}
+
+func TestMergeCursorCLIRejectsInvalidStructureWithoutRewriting(t *testing.T) {
+	for name, original := range map[string]string{
+		"permissions": `{"permissions":"user-value"}`,
+		"allow":       `{"permissions":{"allow":"user-value"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "cli.json")
+			if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if changed, err := mergeCursorCLI(path); err == nil || changed {
+				t.Fatalf("changed=%v err=%v", changed, err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != original {
+				t.Fatalf("invalid user file was rewritten: %s", after)
+			}
+		})
 	}
 }
 
@@ -440,7 +522,7 @@ func TestMergeAndUnmergeAgentHooksPreservesUserHandlers(t *testing.T) {
 		{"claude", `{"model":"keep","hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo user"}]}]}}`},
 		{"codex", `{"description":"keep","hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo user"}]}]}}`},
 		{"cursor", `{"version":1,"other":"keep","hooks":{"sessionStart":[{"command":"echo user"}]}}`},
-		{"antigravity", `{"enabled":true,"other":"keep","PreInvocation":[{"command":"echo user"}]}`},
+		{"antigravity", `{"user-hook":{"enabled":true,"other":"keep","PreInvocation":[{"command":"echo user"}]}}`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.kind, func(t *testing.T) {
@@ -468,6 +550,43 @@ func TestMergeAndUnmergeAgentHooksPreservesUserHandlers(t *testing.T) {
 			last, _ := os.ReadFile(path)
 			if !strings.Contains(string(last), "echo user") || strings.Contains(string(last), "self-heal") {
 				t.Fatalf("hook unmerge removed user content or kept ours:\n%s", last)
+			}
+		})
+	}
+}
+
+func TestPortableHooksMigrateExactV060Commands(t *testing.T) {
+	tests := []struct {
+		kind, original string
+	}{
+		{"cursor", `{"version":1,"hooks":{"sessionStart":[{"command":".agents/bin/agent-parity.cmd self-heal","timeout":30}]}}`},
+		{"antigravity", `{"enabled":true,"PreInvocation":[{"command":".agents/bin/agent-parity.cmd self-heal","timeout":30}]}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.kind, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "hooks.json")
+			if err := os.WriteFile(path, []byte(tc.original), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := mergeAgentHook(path, tc.kind, "", ""); err != nil {
+				t.Fatal(err)
+			}
+			raw, _ := os.ReadFile(path)
+			if strings.Contains(string(raw), `"command": ".agents/bin/agent-parity.cmd self-heal"`) {
+				t.Fatalf("v0.6.0 Windows-only hook was not migrated:\n%s", raw)
+			}
+			if !strings.Contains(string(raw), `"command": ".agents/bin/agent-parity self-heal"`) {
+				t.Fatalf("platform-neutral hook missing:\n%s", raw)
+			}
+			if tc.kind == "antigravity" {
+				root := readSettings(t, path)
+				if _, legacy := root["PreInvocation"]; legacy {
+					t.Fatalf("legacy root event remains: %#v", root)
+				}
+				managed, ok := root["agent-parity"].(map[string]any)
+				if !ok || managed["enabled"] != true || managed["PreInvocation"] == nil {
+					t.Fatalf("official Antigravity hook block missing: %#v", root)
+				}
 			}
 		})
 	}
@@ -517,7 +636,7 @@ func TestStatusHookChecksUseExactJSONPaths(t *testing.T) {
 		"claude":      `{"note":".agents/bin/agent-parity self-heal","hooks":{"OtherEvent":[{"hooks":[{"type":"command","command":".agents/bin/agent-parity self-heal"}]}]}}`,
 		"codex":       `{"note":"agent-parity self-heal","hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo agent-parity self-heal"}]}]}}`,
 		"cursor":      `{"note":".agents/bin/agent-parity.cmd self-heal","hooks":{"other":[{"command":".agents/bin/agent-parity.cmd self-heal"}]}}`,
-		"antigravity": `{"note":".agents/bin/agent-parity.cmd self-heal","OtherEvent":[{"command":".agents/bin/agent-parity.cmd self-heal"}]}`,
+		"antigravity": `{"note":".agents/bin/agent-parity self-heal","other-hook":{"PreInvocation":[{"command":".agents/bin/agent-parity self-heal"}]}}`,
 	}
 	for kind, raw := range decoys {
 		t.Run(kind, func(t *testing.T) {

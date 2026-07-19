@@ -11,6 +11,7 @@ mkdir -p "$root/.agents/scripts" "$root/.agents/mcp/memory" "$root/.agents/claud
   "$root/.agents/skills/agent-parity" "$root/.claude/skills/agent-parity" \
   "$root/.codex" "$root/.cursor" "$root/fake-bin"
 cp "$repo/templates/common.sh" "$repo/templates/uninstall.sh" "$root/.agents/scripts/"
+cp "$repo/templates/status.sh" "$root/.agents/scripts/"
 : > "$root/.agents/scripts/sync-claude.sh"
 : > "$root/.agents/skills/agent-parity/SKILL.md"
 : > "$root/.claude/skills/agent-parity/SKILL.md"
@@ -49,6 +50,32 @@ EOF
 cat > "$root/.cursor/cli.json" <<'EOF'
 {"theme":"dark","permissions":{"allow":["Shell(git:*)","Mcp(memory:*)"],"deny":["Shell(rm:*)"]}}
 EOF
+printf '%s\n' '@AGENTS.md' > "$root/CLAUDE.md"
+cat > "$root/AGENTS.md" <<'EOF'
+user agents content
+<!-- agent-parity:begin -->
+orphaned managed content
+EOF
+cat > "$root/.gitignore" <<'EOF'
+/user-rule/
+# agent-parity:end
+# agent-parity:begin
+/user-tail/
+EOF
+agents_before=$(cat "$root/AGENTS.md")
+gitignore_before=$(cat "$root/.gitignore")
+
+status_output=$(PATH="$root/fake-bin:$PATH" AGENT_PARITY_CONFIG_EDITOR="$config_editor" sh "$root/.agents/scripts/status.sh")
+printf '%s\n' "$status_output" | grep -q '^mcp registrations:$'
+printf '%s\n' "$status_output" | grep -q '^claude wrapper: registered (CLAUDE.md)$'
+! printf '%s\n' "$status_output" | grep -q '^  Claude wrapper:'
+printf '%s\n' "$status_output" | grep -q '^AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; repair them manually$'
+printf '%s\n' "$status_output" | grep -q '^.gitignore: agent-parity markers are incomplete, duplicated, or out of order; repair them manually$'
+rm -f "$root/network-called" "$root/mcp-binary-called"
+
+(TARGET="$root"; . "$root/.agents/scripts/common.sh"; unreg_claude_wrapper)
+[ ! -e "$root/CLAUDE.md" ]
+printf '%s\n' 'user-owned Claude instructions' > "$root/CLAUDE.md"
 
 PATH="$root/fake-bin:$PATH" AGENT_PARITY_CONFIG_EDITOR="$config_editor" sh "$root/.agents/scripts/uninstall.sh"
 
@@ -67,5 +94,8 @@ grep -q '"theme": "dark"' "$root/.cursor/cli.json"
 grep -q 'Shell(git:\*)' "$root/.cursor/cli.json"
 grep -q 'Shell(rm:\*)' "$root/.cursor/cli.json"
 ! grep -q 'Mcp(memory:\*)' "$root/.cursor/cli.json"
+grep -q '^user-owned Claude instructions$' "$root/CLAUDE.md"
+[ "$(cat "$root/AGENTS.md")" = "$agents_before" ]
+[ "$(cat "$root/.gitignore")" = "$gitignore_before" ]
 
 echo "offline Unix uninstall: OK"

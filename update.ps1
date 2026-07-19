@@ -21,6 +21,7 @@ if ($Command -ne "update") {
 $ErrorActionPreference = "Stop"
 
 $Repo = "libkim/agent-parity"
+$PackagedVersion = "dev"
 $Raw = $env:AGENT_PARITY_RAW
 $Release = $env:AGENT_PARITY_RELEASE
 $Version = $env:AGENT_PARITY_VERSION
@@ -47,7 +48,7 @@ $OtherLauncher = ".agents/mcp/memory/run.sh"
 
 if (!(Test-Path -LiteralPath $Target -PathType Container)) { throw "no such directory: $Target" }
 $Target=(Resolve-Path -LiteralPath $Target).Path
-$MemoryRun=Join-Path $Target ($ServerDir.Replace('/','\') + "\run.cmd")
+$ConfigEditor = $null
 
 function Path-InTarget([string]$Rel) {
   return Join-Path $Target ($Rel.Replace('/', '\'))
@@ -149,6 +150,7 @@ function Install-ConfigEditor {
     $actual = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -ne $expected) { throw "checksum mismatch for $asset" }
     Move-Item -LiteralPath $binary -Destination $dest -Force
+    $script:ConfigEditor = $dest
   } finally {
     Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
   }
@@ -163,18 +165,11 @@ function Windows-Template([string]$Template) {
   return $text.TrimEnd("`r", "`n")
 }
 
-function For-EachConfig([string]$Fn) {
+function For-EachMcpConfig([string]$Fn) {
   & $Fn ".mcp.json"               "templates/claude.mcp.json"             $Launcher
   & $Fn ".cursor/mcp.json"        "templates/cursor.mcp.json"             $Launcher
   & $Fn ".codex/config.toml"      "templates/codex.config.toml"           $Launcher
   & $Fn ".agents/mcp_config.json" "templates/antigravity.mcp_config.json" $Launcher
-  & $Fn "CLAUDE.md"               "templates/CLAUDE.md"                   "@AGENTS.md"
-}
-
-function Invoke-MemoryBin {
-  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$BinArgs)
-  & $MemoryRun @BinArgs | Out-Null
-  return $LASTEXITCODE
 }
 
 function Installed-Version {
@@ -183,29 +178,16 @@ function Installed-Version {
   return (Read-Text $versionFile).Trim()
 }
 
-function Latest-Version {
-  try {
-    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing
-    if ($rel.tag_name) { return [string]$rel.tag_name }
-  } catch {}
-  return "unknown"
-}
-
-# Pin scripts, templates, and binaries to one release tag. The project launcher
-# passes both URLs explicitly; direct invocation resolves them here. There is
-# deliberately no main fallback.
-if ((-not $Raw) -or (-not $Release)) {
-  $pinnedTag = Latest-Version
-  if ($pinnedTag -notmatch '^v') { throw "could not resolve latest agent-parity release" }
-  if (-not $Raw)     { $Raw = "https://raw.githubusercontent.com/$Repo/$pinnedTag" }
-  if (-not $Release) { $Release = "https://github.com/$Repo/releases/download/$pinnedTag" }
-}
-
+# Release assets have PackagedVersion replaced with their tag by build.sh. The
+# latest asset URL is resolved before this script starts, so there is no second
+# latest-release lookup here.
 if (-not $Version) {
-  $rawLeaf = $Raw.TrimEnd('/').Split('/')[-1]
-  $Version = if ($rawLeaf -match '^v') { $rawLeaf } else { "dev" }
+  if ($PackagedVersion -eq "dev") { throw "unpackaged update.ps1 requires AGENT_PARITY_VERSION" }
+  $Version = $PackagedVersion
 }
 if ($Version -notmatch '^(v[0-9A-Za-z._-]+|dev)$') { throw "invalid agent-parity release version: $Version" }
+if (-not $Raw)     { $Raw = "https://raw.githubusercontent.com/$Repo/$Version" }
+if (-not $Release) { $Release = "https://github.com/$Repo/releases/download/$Version" }
 
 
 function Install-Server {
@@ -218,21 +200,19 @@ function Install-Server {
     Download-File "$Raw/run.cmd" (Join-Path $stage "run.cmd")
     Write-Text (Join-Path $stage "VERSION") ($Version + "`n")
     Write-Text (Join-Path $stage "RELEASE") ($Release.TrimEnd('/') + "`n")
-    & (Join-Path $stage "run.cmd") -version | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "could not prepare the shared memory-mcp cache" }
     foreach ($name in @("run.sh", "run.cmd", "VERSION", "RELEASE")) {
       Move-Item -LiteralPath (Join-Path $stage $name) -Destination (Join-Path $dest $name) -Force
     }
   } finally {
     Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
   }
-  # Remove a legacy vendored copy only after the verified cache and launchers
-  # are ready.
+  # Remove a legacy vendored copy only after the pinned launchers and release
+  # metadata are ready. The shared MCP binary is downloaded on first launch.
   Remove-Item -LiteralPath (Join-Path $dest "dist") -Recurse -Force -ErrorAction SilentlyContinue
-  Write-Output "server: pinned $Version (current platform binary verified in the shared cache)"
+  Write-Output "server: pinned $Version (current platform binary downloads on first MCP launch)"
 }
 
-function Reg-Config([string]$Rel, [string]$Template, [string]$Marker) {
+function Reg-McpConfig([string]$Rel, [string]$Template, [string]$Marker) {
   $t = Path-InTarget $Rel
   $c = Windows-Template $Template
   $existing = Read-Text $t
@@ -240,12 +220,10 @@ function Reg-Config([string]$Rel, [string]$Template, [string]$Marker) {
     Write-Text $t ($c + "`n")
     Write-Output "  wrote:      $Rel"
   } elseif ($Marker -eq $Launcher) {
-    $cacheRoot = if ($env:AGENT_PARITY_CACHE) { $env:AGENT_PARITY_CACHE } elseif ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "agent-parity\cache" } else { Join-Path $env:USERPROFILE ".cache\agent-parity" }
-    $editor = Join-Path $cacheRoot "config\$Version\agent-parity-config-windows-amd64.exe"
-    $current = & $editor command $t 2>$null
+    $current = & $ConfigEditor command $t 2>$null
     $code = $LASTEXITCODE
     if ($code -eq 0) {
-      $result = & $editor ensure $t $Launcher
+      $result = & $ConfigEditor ensure $t $Launcher
       if ($LASTEXITCODE -ne 0) { throw "could not safely update $Rel" }
       if (($result | Out-String).Trim() -eq "changed") {
         Write-Output "  retargeted: $Rel (launcher -> Windows launcher)"
@@ -256,7 +234,7 @@ function Reg-Config([string]$Rel, [string]$Template, [string]$Marker) {
         $c -split "`n" | ForEach-Object { Write-Output "    | $_" }
       }
     } elseif ($code -eq 1) {
-      & $editor ensure $t $Launcher | Out-Null
+      & $ConfigEditor ensure $t $Launcher | Out-Null
       if ($LASTEXITCODE -ne 0) { throw "could not safely merge $Rel" }
       Write-Output "  merged:     $Rel (added memory server entry)"
     } else {
@@ -271,18 +249,29 @@ function Reg-Config([string]$Rel, [string]$Template, [string]$Marker) {
   }
 }
 
+function Reg-ClaudeWrapper {
+  $path = Path-InTarget "CLAUDE.md"
+  $existing = Read-Text $path
+  if ($null -eq $existing) {
+    Write-Text $path "@AGENTS.md`n"
+    Write-Output "claude wrapper: wrote CLAUDE.md"
+  } elseif ($existing.Replace("`r`n", "`n") -ceq "@AGENTS.md`n" -or $existing -ceq "@AGENTS.md") {
+    Write-Output "claude wrapper: registered (CLAUDE.md)"
+  } else {
+    Write-Output "claude wrapper: existing CLAUDE.md preserved; expected exact content: @AGENTS.md"
+  }
+}
+
 function Reg-CursorCli {
   $t = Path-InTarget $CursorCli
-  $c = (Fetch-Text "templates/cursor.cli.json").TrimEnd("`r", "`n")
-  $existing = Read-Text $t
-  if ($null -eq $existing) {
-    Write-Text $t ($c + "`n")
-    Write-Output "  wrote:      $CursorCli"
-  } elseif ($existing.TrimEnd("`r", "`n") -eq $c) {
+  $result = & $ConfigEditor merge-cursor-cli $t
+  if ($LASTEXITCODE -ne 0) { throw "could not safely merge $CursorCli" }
+  if ($result -eq "changed") {
+    Write-Output "  merged:     $CursorCli (added memory allowlist entry)"
+  } elseif ($result -eq "unchanged") {
     Write-Output "  registered: $CursorCli (already)"
   } else {
-    Write-Output "  exists:     $CursorCli -- merge this in:"
-    $c -split "`n" | ForEach-Object { Write-Output "    | $_" }
+    throw "unexpected config editor result for ${CursorCli}: $result"
   }
 }
 
@@ -296,7 +285,8 @@ function Reg-AgentHooks {
   )) {
     $kind = $entry.Kind
     $path = $entry.Path
-    if ((Invoke-MemoryBin "-merge-agent-hook" (Path-InTarget $path) "-hook-kind" $kind) -ne 0) {
+    & $ConfigEditor merge-hook (Path-InTarget $path) $kind | Out-Null
+    if ($LASTEXITCODE -ne 0) {
       throw "could not register $kind self-heal hook"
     }
   }
@@ -318,10 +308,25 @@ function Test-Ignored([string]$Rel) {
   return $LASTEXITCODE -eq 0
 }
 
+function Get-ManagedBlockState([string]$Text, [string]$Begin, [string]$End) {
+  if ($null -eq $Text) { return "absent" }
+  $beginHits = [regex]::Matches($Text, [regex]::Escape($Begin)).Count
+  $endHits = [regex]::Matches($Text, [regex]::Escape($End)).Count
+  if ($beginHits -eq 0 -and $endHits -eq 0) { return "absent" }
+  $lines = [regex]::Split($Text, "`r`n|`n|`r")
+  $beginLine = -1
+  $endLine = -1
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -ceq $Begin) { $beginLine = $i }
+    if ($lines[$i] -ceq $End) { $endLine = $i }
+  }
+  if ($beginHits -eq 1 -and $endHits -eq 1 -and $beginLine -ge 0 -and $beginLine -lt $endLine) { return "valid" }
+  return "invalid"
+}
+
 function Strip-GitIgnoreBlock {
   $gi = Path-InTarget ".gitignore"
   $text = Read-Text $gi
-  if ($null -eq $text -or !$text.Contains($GitIgnoreBegin) -or !$text.Contains($GitIgnoreEnd)) { return }
   $lines = $text -split "`r?`n"
   $out = New-Object System.Collections.Generic.List[string]
   $inBlock = $false
@@ -335,7 +340,14 @@ function Strip-GitIgnoreBlock {
 
 function Sync-GitIgnore {
   if (!(Test-GitRepo)) { return }
-  Strip-GitIgnoreBlock
+  $gi = Path-InTarget ".gitignore"
+  $state = Get-ManagedBlockState (Read-Text $gi) $GitIgnoreBegin $GitIgnoreEnd
+  if ($state -eq "valid") {
+    Strip-GitIgnoreBlock
+  } elseif ($state -eq "invalid") {
+    Write-Warning ".gitignore: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
+    return
+  }
   $rules = New-Object System.Collections.Generic.List[string]
   # Legacy installs may still have a vendored dist directory. Keep it out of
   # Git even if an interrupted migration leaves files behind.
@@ -416,7 +428,8 @@ function Install-Skills {
     Copy-Item -LiteralPath $tgt -Destination $src -Force
     Write-Output "  migrated:   $ClaudeTgt -> $ClaudeSrc"
   }
-  if ((Invoke-MemoryBin "-merge-claude-settings" $src "-hook-command" $ClaudeHook) -eq 0) {
+  & $ConfigEditor merge-claude-settings $src $ClaudeHook | Out-Null
+  if ($LASTEXITCODE -eq 0) {
     Write-Output "  merged:     $ClaudeSrc (memory keys + sync hook)"
   } else {
     Write-Output "  warn:       could not merge $ClaudeSrc"
@@ -429,18 +442,21 @@ function Sync-AgentsBlock {
   $ag = Path-InTarget "AGENTS.md"
   $snip = (Fetch-Text "templates/AGENTS.snippet.md").TrimEnd("`r", "`n")
   $text = Read-Text $ag
-  if ($null -ne $text -and $text.Contains($MarkBegin) -and $text.Contains($MarkEnd)) {
+  $state = Get-ManagedBlockState $text $MarkBegin $MarkEnd
+  if ($state -eq "valid") {
     $pattern = [regex]::Escape($MarkBegin) + '(?s).*?' + [regex]::Escape($MarkEnd)
     $next = [regex]::Replace($text, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $snip })
     if ($next -eq $text) { Write-Output "AGENTS.md: memory block up to date" }
     else { Write-Text $ag $next; Write-Output "AGENTS.md: refreshed memory instruction block" }
-  } else {
+  } elseif ($state -eq "absent") {
     if ($null -ne $text -and $text -match 'memory_(recent|add|search|get)') {
       Write-Output "AGENTS.md: note -- existing text already mentions the memory tools; check it against the appended block for duplication"
     }
     if ($null -eq $text) { $text = "" }
     Write-Text $ag ($text.TrimEnd("`r", "`n") + "`n`n" + $snip + "`n")
     Write-Output "AGENTS.md: appended memory instruction block"
+  } else {
+    Write-Warning "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
   }
 }
 
@@ -452,8 +468,9 @@ function Cmd-Update {
   Install-ProjectCli
   Install-ConfigEditor
   Write-Output "configs:"
-  For-EachConfig "Reg-Config"
+  For-EachMcpConfig "Reg-McpConfig"
   Reg-CursorCli
+  Reg-ClaudeWrapper
   Install-Skills
   Reg-AgentHooks
   Sync-AgentsBlock

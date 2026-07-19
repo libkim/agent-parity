@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-compile a static, runtime-free binary for each target OS/arch.
+# Cross-compile static, runtime-free binaries for each target OS/arch.
 # CGO_ENABLED=0 keeps the build pure-Go so all targets build from one machine.
 set -euo pipefail
 
@@ -35,6 +35,17 @@ done
 
 # The launchers verify every downloaded release binary before caching it.
 (cd "$OUT" && sha256sum memory-mcp-* agent-parity-config-* | LC_ALL=C sort -k2 > checksums.txt)
+
+# Installers and updaters are release assets. Bake the tag into each copy so
+# the downloaded bootstrap and every file it installs use one release.
+sed "s/^PACKAGED_VERSION=\"dev\"$/PACKAGED_VERSION=\"$VERSION\"/" install.sh > "$OUT/install.sh"
+sed "s/^\\\$PackagedVersion = \"dev\"$/\\\$PackagedVersion = \"$VERSION\"/" install.ps1 > "$OUT/install.ps1"
+sed "s/^PACKAGED_VERSION=\"dev\"$/PACKAGED_VERSION=\"$VERSION\"/" update.sh > "$OUT/update.sh"
+sed "s/^\\\$PackagedVersion = \"dev\"$/\\\$PackagedVersion = \"$VERSION\"/" update.ps1 > "$OUT/update.ps1"
+grep -q "^PACKAGED_VERSION=\"$VERSION\"$" "$OUT/install.sh"
+grep -q "^\\\$PackagedVersion = \"$VERSION\"$" "$OUT/install.ps1"
+grep -q "^PACKAGED_VERSION=\"$VERSION\"$" "$OUT/update.sh"
+grep -q "^\\\$PackagedVersion = \"$VERSION\"$" "$OUT/update.ps1"
 
 echo "done -> ${OUT}/"
 ls -lh "$OUT"

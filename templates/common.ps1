@@ -27,24 +27,6 @@ $ParityBreakers = @(
 )
 $Launcher = ".agents/mcp/memory/run.cmd"
 $OtherLauncher = ".agents/mcp/memory/run.sh"
-$ManagedLaunchers = @($Launcher, $OtherLauncher)
-$ManagedSelfHealCommands = @(
-  '.agents/bin/agent-parity self-heal',
-  'sh -c ''root=$(git rev-parse --show-toplevel) && exec "$root/.agents/bin/agent-parity" self-heal''',
-  'powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) ''.agents/bin/agent-parity.cmd'') self-heal"',
-  '.agents/bin/agent-parity.cmd self-heal'
-)
-$ManagedSyncCommands = @(
-  'bash "$CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.sh" sync',
-  'powershell -NoProfile -ExecutionPolicy Bypass -Command "& \"$env:CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.ps1\" sync"',
-  '.agents/bin/agent-parity sync-claude'
-)
-$MemoryPermissions = @(
-  'mcp__memory__memory_add',
-  'mcp__memory__memory_recent',
-  'mcp__memory__memory_search',
-  'mcp__memory__memory_get'
-)
 
 $Target = (Resolve-Path -LiteralPath $Target).Path
 $editorVersionPath = Join-Path $Target ".agents\mcp\memory\VERSION"
@@ -70,87 +52,49 @@ function Read-Text([string]$Path) {
   return [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
 }
 
+function New-StagingFile([string]$Path) {
+  Ensure-Parent $Path
+  $parent = Split-Path -Parent $Path
+  $leaf = Split-Path -Leaf $Path
+  do {
+    $candidate = Join-Path $parent (".$leaf.agent-parity." + [Guid]::NewGuid().ToString("N") + ".tmp")
+  } while (Test-Path -LiteralPath $candidate)
+  $stream = [System.IO.File]::Open($candidate, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+  $stream.Dispose()
+  return $candidate
+}
+
 function Write-Text([string]$Path, [string]$Text) {
   Ensure-Parent $Path
   $enc = New-Object System.Text.UTF8Encoding($false)
-  [System.IO.File]::WriteAllText($Path, $Text, $enc)
+  $temp = New-StagingFile $Path
+  try {
+    [System.IO.File]::WriteAllText($temp, $Text, $enc)
+    Move-Item -LiteralPath $temp -Destination $Path -Force
+    $temp = $null
+  } finally {
+    if ($temp) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+  }
 }
 
-function For-EachConfig([string]$Fn) {
+function Test-ClaudeWrapper([string]$Path) {
+  $text = Read-Text $Path
+  if ($null -eq $text) { return $false }
+  $normalized = $text.Replace("`r`n", "`n")
+  return $normalized -ceq "@AGENTS.md`n" -or $normalized -ceq "@AGENTS.md"
+}
+
+function For-EachMcpConfig([string]$Fn) {
   & $Fn ".mcp.json"               "templates/claude.mcp.json"             $Launcher
   & $Fn ".cursor/mcp.json"        "templates/cursor.mcp.json"             $Launcher
   & $Fn ".codex/config.toml"      "templates/codex.config.toml"           $Launcher
   & $Fn ".agents/mcp_config.json" "templates/antigravity.mcp_config.json" $Launcher
-  & $Fn "CLAUDE.md"               "templates/CLAUDE.md"                   "@AGENTS.md"
 }
 
-function Normalize-ManagedCommand([object]$Command) {
-  if ($Command -isnot [string]) { return "" }
-  return $Command.Trim().Replace('\', '/')
-}
-
-function Test-ManagedCommand([object]$Command, [string[]]$Candidates) {
-  $normalized = Normalize-ManagedCommand $Command
-  return $Candidates | Where-Object { (Normalize-ManagedCommand $_) -eq $normalized } | Select-Object -First 1
-}
-
-function Remove-JsonProperty([object]$Object, [string]$Name) {
-  if ($null -ne $Object -and $null -ne $Object.PSObject.Properties[$Name]) {
-    $Object.PSObject.Properties.Remove($Name)
+function Require-LocalConfigEditor {
+  if (!(Test-Path -LiteralPath $ConfigEditor -PathType Leaf)) {
+    throw "missing local config editor: $ConfigEditor"
   }
-}
-
-function Test-JsonObjectEmpty([object]$Object) {
-  return $null -eq $Object -or @($Object.PSObject.Properties).Count -eq 0
-}
-
-function Write-JsonOrRemove([string]$Path, [object]$Root, [hashtable]$Ignorable = @{}) {
-  $properties = @($Root.PSObject.Properties)
-  $onlyIgnorable = $properties.Count -eq $Ignorable.Count
-  if ($onlyIgnorable) {
-    foreach ($property in $properties) {
-      if (!$Ignorable.ContainsKey($property.Name) -or $Ignorable[$property.Name] -ne $property.Value) {
-        $onlyIgnorable = $false
-        break
-      }
-    }
-  }
-  if ($properties.Count -eq 0 -or $onlyIgnorable) {
-    Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
-  } else {
-    Write-Text $Path (($Root | ConvertTo-Json -Depth 100) + "`n")
-  }
-}
-
-function Remove-NestedHandlers([object]$Root, [string]$Event, [string[]]$Commands) {
-  $hooks = $Root.hooks
-  if ($null -eq $hooks -or $null -eq $hooks.$Event) { return $false }
-  $changed = $false
-  $keptGroups = @()
-  foreach ($group in @($hooks.$Event)) {
-    if ($null -eq $group.hooks) { $keptGroups += $group; continue }
-    $kept = @()
-    foreach ($handler in @($group.hooks)) {
-      if (Test-ManagedCommand $handler.command $Commands) { $changed = $true } else { $kept += $handler }
-    }
-    if ($kept.Count -gt 0) { $group.hooks = $kept; $keptGroups += $group }
-  }
-  if ($changed) {
-    if ($keptGroups.Count -gt 0) { $hooks.$Event = $keptGroups } else { Remove-JsonProperty $hooks $Event }
-    if (Test-JsonObjectEmpty $hooks) { Remove-JsonProperty $Root "hooks" }
-  }
-  return $changed
-}
-
-function Remove-FlatHandlers([object]$Root, [string]$Event, [string[]]$Commands, [bool]$Cursor = $false) {
-  $container = if ($Cursor) { $Root.hooks } else { $Root }
-  if ($null -eq $container -or $null -eq $container.$Event) { return $false }
-  $original = @($container.$Event)
-  $kept = @($original | Where-Object { -not (Test-ManagedCommand $_.command $Commands) })
-  if ($kept.Count -eq $original.Count) { return $false }
-  if ($kept.Count -gt 0) { $container.$Event = $kept } else { Remove-JsonProperty $container $Event }
-  if ($Cursor -and (Test-JsonObjectEmpty $container)) { Remove-JsonProperty $Root "hooks" }
-  return $true
 }
 
 function Installed-Version {
@@ -192,50 +136,28 @@ function Show-UpdateNotice([string]$Installed, [string]$Latest) {
 
 function Unreg-CursorCli {
   $t = Path-InTarget $CursorCli
-  $text = Read-Text $t
-  if ($null -eq $text) { return }
-  try { $root = $text | ConvertFrom-Json } catch { Write-Output "  edit manually: $CursorCli -- invalid JSON"; return }
-  if ($null -eq $root.permissions -or $null -eq $root.permissions.allow) {
+  if (!(Test-Path -LiteralPath $t -PathType Leaf)) { return }
+  $result = & $ConfigEditor unmerge-cursor-cli $t 2>$null
+  if ($LASTEXITCODE -ne 0) { throw "could not safely update $CursorCli" }
+  if (($result | Out-String).Trim() -eq "changed") {
+    Write-Output "  unmerged:      $CursorCli (removed memory allowlist entry, kept the rest)"
+  } else {
     Write-Output "  unchanged:     $CursorCli (memory allowlist entry not present)"
-    return
   }
-  $original = @($root.permissions.allow)
-  $allow = @($original | Where-Object { $_ -ne 'Mcp(memory:*)' })
-  if ($allow.Count -eq $original.Count) {
-    Write-Output "  unchanged:     $CursorCli (memory allowlist entry not present)"
-    return
-  }
-  if ($allow.Count -gt 0) { $root.permissions.allow = $allow } else { Remove-JsonProperty $root.permissions "allow" }
-  if ($null -ne $root.permissions.deny -and @($root.permissions.deny).Count -eq 0) { Remove-JsonProperty $root.permissions "deny" }
-  if (Test-JsonObjectEmpty $root.permissions) { Remove-JsonProperty $root "permissions" }
-  Write-JsonOrRemove $t $root
-  Write-Output "  unmerged:      $CursorCli (removed memory allowlist entry, kept the rest)"
 }
 
 function Unreg-AgentHooks {
-  Unreg-AgentHook (Path-InTarget $ClaudeSrc) "claude"
-  Unreg-AgentHook (Path-InTarget $ClaudeTgt) "claude"
-  Unreg-AgentHook (Path-InTarget ".codex/hooks.json") "codex"
-  Unreg-AgentHook (Path-InTarget ".cursor/hooks.json") "cursor"
-  Unreg-AgentHook (Path-InTarget ".agents/hooks.json") "antigravity"
+  foreach ($entry in @(
+    @{ Kind = "claude"; Path = $ClaudeSrc },
+    @{ Kind = "claude"; Path = $ClaudeTgt },
+    @{ Kind = "codex"; Path = ".codex/hooks.json" },
+    @{ Kind = "cursor"; Path = ".cursor/hooks.json" },
+    @{ Kind = "antigravity"; Path = ".agents/hooks.json" }
+  )) {
+    & $ConfigEditor unmerge-hook (Path-InTarget $entry.Path) $entry.Kind | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "could not safely remove $($entry.Kind) hook from $($entry.Path)" }
+  }
   Write-Output "  hooks:      removed agent-parity self-heal handlers"
-}
-
-function Unreg-AgentHook([string]$Path, [string]$Kind) {
-  $text = Read-Text $Path
-  if ($null -eq $text) { return }
-  try { $root = $text | ConvertFrom-Json } catch { Write-Output "  edit manually: $Path -- invalid hook JSON"; return }
-  if ($Kind -in @("claude", "codex")) {
-    $changed = Remove-NestedHandlers $root "SessionStart" $ManagedSelfHealCommands
-  } elseif ($Kind -eq "cursor") {
-    $changed = Remove-FlatHandlers $root "sessionStart" $ManagedSelfHealCommands $true
-  } else {
-    $changed = Remove-FlatHandlers $root "PreInvocation" $ManagedSelfHealCommands
-  }
-  if ($changed) {
-    $ignorable = if ($Kind -eq "cursor") { @{ version = 1 } } elseif ($Kind -eq "antigravity") { @{ enabled = $true } } else { @{} }
-    Write-JsonOrRemove $Path $root $ignorable
-  }
 }
 
 function Test-GitRepo {
@@ -251,10 +173,25 @@ function Test-Ignored([string]$Rel) {
   return $LASTEXITCODE -eq 0
 }
 
+function Get-ManagedBlockState([string]$Text, [string]$Begin, [string]$End) {
+  if ($null -eq $Text) { return "absent" }
+  $beginHits = [regex]::Matches($Text, [regex]::Escape($Begin)).Count
+  $endHits = [regex]::Matches($Text, [regex]::Escape($End)).Count
+  if ($beginHits -eq 0 -and $endHits -eq 0) { return "absent" }
+  $lines = [regex]::Split($Text, "`r`n|`n|`r")
+  $beginLine = -1
+  $endLine = -1
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -ceq $Begin) { $beginLine = $i }
+    if ($lines[$i] -ceq $End) { $endLine = $i }
+  }
+  if ($beginHits -eq 1 -and $endHits -eq 1 -and $beginLine -ge 0 -and $beginLine -lt $endLine) { return "valid" }
+  return "invalid"
+}
+
 function Strip-GitIgnoreBlock {
   $gi = Path-InTarget ".gitignore"
   $text = Read-Text $gi
-  if ($null -eq $text -or !$text.Contains($GitIgnoreBegin) -or !$text.Contains($GitIgnoreEnd)) { return }
   $lines = $text -split "`r?`n"
   $out = New-Object System.Collections.Generic.List[string]
   $inBlock = $false
@@ -273,7 +210,9 @@ function Uninstall-Skills {
   # script.
   foreach ($f in @($ClaudeTgt, $ClaudeSrc)) {
     $full = Path-InTarget $f
-    if (Test-Path -LiteralPath $full) { Unreg-ClaudeSettings $full }
+    if (!(Test-Path -LiteralPath $full -PathType Leaf)) { continue }
+    & $ConfigEditor unmerge-claude-settings $full | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "could not safely update $f" }
   }
   Remove-Item -LiteralPath $s -Force -ErrorAction SilentlyContinue
   # The agent-parity skill is our wiring, not a user skill: remove both the
@@ -281,26 +220,6 @@ function Uninstall-Skills {
   Remove-Item -LiteralPath (Path-InTarget ".agents/skills/agent-parity") -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath (Path-InTarget ".claude/skills/agent-parity") -Recurse -Force -ErrorAction SilentlyContinue
   Write-Output "skills: removed sync wiring"
-}
-
-function Unreg-ClaudeSettings([string]$Path) {
-  $text = Read-Text $Path
-  if ($null -eq $text) { return }
-  try { $root = $text | ConvertFrom-Json } catch { Write-Output "  edit manually: $Path -- invalid Claude settings JSON"; return }
-  $before = $root | ConvertTo-Json -Depth 100 -Compress
-  Remove-JsonProperty $root "autoMemoryEnabled"
-  if ($null -ne $root.enabledMcpjsonServers) {
-    $servers = @($root.enabledMcpjsonServers | Where-Object { $_ -ne "memory" })
-    if ($servers.Count -gt 0) { $root.enabledMcpjsonServers = $servers } else { Remove-JsonProperty $root "enabledMcpjsonServers" }
-  }
-  if ($null -ne $root.permissions -and $null -ne $root.permissions.allow) {
-    $allow = @($root.permissions.allow | Where-Object { $_ -notin $MemoryPermissions })
-    if ($allow.Count -gt 0) { $root.permissions.allow = $allow } else { Remove-JsonProperty $root.permissions "allow" }
-    if (Test-JsonObjectEmpty $root.permissions) { Remove-JsonProperty $root "permissions" }
-  }
-  [void](Remove-NestedHandlers $root "SessionStart" ($ManagedSyncCommands + $ManagedSelfHealCommands))
-  $after = $root | ConvertTo-Json -Depth 100 -Compress
-  if ($before -ne $after) { Write-JsonOrRemove $Path $root }
 }
 
 function Warn-Parity {
@@ -370,29 +289,32 @@ function Status-CodexMcp {
 }
 
 
-function Unreg-Config([string]$Rel, [string]$Template, [string]$Marker) {
+function Unreg-McpConfig([string]$Rel, [string]$Template, [string]$Marker) {
   $t = Path-InTarget $Rel
   $text = Read-Text $t
   if ($null -eq $text) { return }
-  if ($Rel -eq "CLAUDE.md") {
-    if ($text.TrimEnd([char[]]"`r`n") -ceq "@AGENTS.md") {
-      Remove-Item -LiteralPath $t -Force
-      Write-Output "  removed:       $Rel"
-    }
-    return
-  }
-  if ($Marker -eq $Launcher) {
-    if (!(Test-Path -LiteralPath $ConfigEditor -PathType Leaf)) { Write-Output "  edit manually: $Rel -- local config editor missing"; return }
-    $result = & $ConfigEditor unmerge $t 2>$null
-    if ($LASTEXITCODE -eq 0 -and ($result | Out-String).Trim() -eq "changed") {
-      Write-Output "  unmerged:      $Rel (removed memory server entry, kept the rest)"
-    } elseif ($LASTEXITCODE -ne 0) {
-      Write-Output "  edit manually: $Rel -- invalid JSON/TOML"
-    }
+  if (!(Test-Path -LiteralPath $ConfigEditor -PathType Leaf)) { Write-Output "  edit manually: $Rel -- local config editor missing"; return }
+  $result = & $ConfigEditor unmerge $t 2>$null
+  if ($LASTEXITCODE -eq 0 -and ($result | Out-String).Trim() -eq "changed") {
+    Write-Output "  unmerged:      $Rel (removed memory server entry, kept the rest)"
+  } elseif ($LASTEXITCODE -ne 0) {
+    Write-Output "  edit manually: $Rel -- invalid JSON/TOML"
   }
 }
 
-function Status-AgentConfig([string]$Label, [string]$Rel, [string]$Marker) {
+function Unreg-ClaudeWrapper {
+  $path = Path-InTarget "CLAUDE.md"
+  $text = Read-Text $path
+  if ($null -eq $text) { return }
+  if (Test-ClaudeWrapper $path) {
+    Remove-Item -LiteralPath $path -Force
+    Write-Output "claude wrapper: removed CLAUDE.md"
+  } else {
+    Write-Output "claude wrapper: existing CLAUDE.md preserved"
+  }
+}
+
+function Status-McpRegistration([string]$Label, [string]$Rel, [string]$Marker) {
   $t = Path-InTarget $Rel
   $text = Read-Text $t
   if ($null -eq $text) { Write-Output "  ${Label}: config missing ($Rel)" }
@@ -406,8 +328,6 @@ function Status-AgentConfig([string]$Label, [string]$Rel, [string]$Marker) {
     elseif ($code -eq 0) { Write-Output "  ${Label}: points elsewhere ($Rel has a memory entry not using $ServerDir)" }
     elseif ($code -eq 1) { Write-Output "  ${Label}: not registered ($Rel)" }
     else { Write-Output "  ${Label}: invalid JSON/TOML ($Rel)" }
-  } elseif ($Rel -eq "CLAUDE.md" -and $text.TrimEnd([char[]]"`r`n") -ceq "@AGENTS.md") {
-    Write-Output "  ${Label}: registered ($Rel)"
   } else {
     Write-Output "  ${Label}: not registered ($Rel)"
   }
@@ -415,11 +335,21 @@ function Status-AgentConfig([string]$Label, [string]$Rel, [string]$Marker) {
 
 function Status-McpRegistrations {
   Write-Output "mcp registrations:"
-  Status-AgentConfig "Claude Code"     ".mcp.json"               $Launcher
-  Status-AgentConfig "Cursor"          ".cursor/mcp.json"        $Launcher
-  Status-AgentConfig "Codex"           ".codex/config.toml"      $Launcher
-  Status-AgentConfig "Antigravity CLI" ".agents/mcp_config.json" $Launcher
-  Status-AgentConfig "Claude wrapper"  "CLAUDE.md"               "@AGENTS.md"
+  Status-McpRegistration "Claude Code"     ".mcp.json"               $Launcher
+  Status-McpRegistration "Cursor"          ".cursor/mcp.json"        $Launcher
+  Status-McpRegistration "Codex"           ".codex/config.toml"      $Launcher
+  Status-McpRegistration "Antigravity CLI" ".agents/mcp_config.json" $Launcher
+}
+
+function Status-ClaudeWrapper {
+  $text = Read-Text (Path-InTarget "CLAUDE.md")
+  if ($null -eq $text) {
+    Write-Output "claude wrapper: missing (CLAUDE.md)"
+  } elseif (Test-ClaudeWrapper (Path-InTarget "CLAUDE.md")) {
+    Write-Output "claude wrapper: registered (CLAUDE.md)"
+  } else {
+    Write-Output "claude wrapper: not registered (existing CLAUDE.md preserved)"
+  }
 }
 
 function Status-AgentHooks {

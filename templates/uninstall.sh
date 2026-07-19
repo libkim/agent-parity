@@ -15,8 +15,9 @@ platform
 require_local_config_editor
 
 echo "configs:"
-for_each_config unreg_config
+for_each_mcp_config unreg_mcp_config
 unreg_cursor_cli
+unreg_claude_wrapper
 unreg_agent_hooks
 rm -f "$TARGET/$PROJECT_CLI_DIR/agent-parity" "$TARGET/$PROJECT_CLI_DIR/agent-parity.cmd" "$TARGET/$PROJECT_CLI_DIR/agent-parity.ps1"
 rmdir "$TARGET/$PROJECT_CLI_DIR" 2>/dev/null || true
@@ -25,7 +26,8 @@ rm -rf "$TARGET/$SERVER_DIR"
 rmdir "$TARGET/.agents/mcp" 2>/dev/null || true
 echo "removed: $SERVER_DIR"
 ag="$TARGET/AGENTS.md"
-if [ -e "$ag" ] && grep -qF "$MARK_BEGIN" "$ag" 2>/dev/null && grep -qF "$MARK_END" "$ag" 2>/dev/null; then
+ag_state=$(managed_block_state "$ag" "$MARK_BEGIN" "$MARK_END")
+if [ "$ag_state" = valid ]; then
   make_local_temp_for "$ag"
   awk -v b="$MARK_BEGIN" -v e="$MARK_END" '
     { line = $0; sub(/\r$/, "", line) }
@@ -35,12 +37,18 @@ if [ -e "$ag" ] && grep -qF "$MARK_BEGIN" "$ag" 2>/dev/null && grep -qF "$MARK_E
   ' "$ag" > "$LOCAL_TEMP_FILE"
   commit_local_temp "$ag"
   echo "AGENTS.md: removed memory instruction block"
+elif [ "$ag_state" = invalid ]; then
+  echo "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
 elif [ -e "$ag" ] && grep -q "memory MCP server" "$ag" 2>/dev/null; then
   echo "AGENTS.md: has a memory block without markers -- remove it manually"
 fi
-if [ -e "$TARGET/.gitignore" ] && grep -qF "$GI_BEGIN" "$TARGET/.gitignore" 2>/dev/null; then
+gi="$TARGET/.gitignore"
+gi_state=$(managed_block_state "$gi" "$GI_BEGIN" "$GI_END")
+if [ "$gi_state" = valid ]; then
   strip_gitignore_block
   echo ".gitignore: removed agent-parity block"
+elif [ "$gi_state" = invalid ]; then
+  echo ".gitignore: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
 fi
 if [ "$PURGE" = "yes" ]; then
   rm -rf "$TARGET/$STORE_DIR"

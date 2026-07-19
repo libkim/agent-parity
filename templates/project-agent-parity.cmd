@@ -29,7 +29,7 @@ if not "%~2"=="" (
   exit /b 2
 )
 set "AGENT_PARITY_TARGET=%~dp0..\.."
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$repo='libkim/agent-parity'; if ($env:AGENT_PARITY_RAW) { $raw=$env:AGENT_PARITY_RAW.TrimEnd('/') } else { $tag=(Invoke-RestMethod -Uri ('https://api.github.com/repos/' + $repo + '/releases/latest')).tag_name; if ($tag -notmatch '^v') { throw 'could not resolve latest agent-parity release' }; $raw='https://raw.githubusercontent.com/' + $repo + '/' + $tag; $env:AGENT_PARITY_RAW=$raw; $env:AGENT_PARITY_VERSION=$tag; if (-not $env:AGENT_PARITY_RELEASE) { $env:AGENT_PARITY_RELEASE='https://github.com/' + $repo + '/releases/download/' + $tag } }; $response=Invoke-WebRequest -UseBasicParsing -Uri ($raw + '/update.ps1'); $source=$response.Content; if ($source -is [byte[]]) { $source=[Text.Encoding]::UTF8.GetString($source) }; & ([scriptblock]::Create([string]$source)) update $env:AGENT_PARITY_TARGET"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$repo='libkim/agent-parity'; if ($env:AGENT_PARITY_RAW) { $uri=$env:AGENT_PARITY_RAW.TrimEnd('/') + '/update.ps1' } else { $uri='https://github.com/' + $repo + '/releases/latest/download/update.ps1' }; $response=Invoke-WebRequest -UseBasicParsing -Uri $uri; $source=$response.Content; if ($source -is [byte[]]) { $source=[Text.Encoding]::UTF8.GetString($source) }; & ([scriptblock]::Create([string]$source)) update $env:AGENT_PARITY_TARGET"
 set "agent_parity_exit=%ERRORLEVEL%"
 if not "%agent_parity_exit%"=="0" (
   if exist "%agent_parity_bin%agent-parity.cmd.new" del /q "%agent_parity_bin%agent-parity.cmd.new" >nul 2>&1

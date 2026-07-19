@@ -11,10 +11,12 @@ foreach ($arg in $CliArgs) {
 }
 $Target = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 . (Join-Path $PSScriptRoot "common.ps1") -Target $Target
+Require-LocalConfigEditor
 
 Write-Output "configs:"
-For-EachConfig "Unreg-Config"
+For-EachMcpConfig "Unreg-McpConfig"
 Unreg-CursorCli
+Unreg-ClaudeWrapper
 Unreg-AgentHooks
 Uninstall-Skills
 $server = Path-InTarget $ServerDir
@@ -22,12 +24,24 @@ if (Test-Path -LiteralPath $server) { Remove-Item -LiteralPath $server -Recurse 
 Write-Output "removed: $ServerDir"
 $ag = Path-InTarget "AGENTS.md"
 $text = Read-Text $ag
-if ($text -and $text.Contains($MarkBegin) -and $text.Contains($MarkEnd)) {
+$agState = Get-ManagedBlockState $text $MarkBegin $MarkEnd
+if ($agState -eq "valid") {
   $pattern = [regex]::Escape($MarkBegin) + '(?s).*?' + [regex]::Escape($MarkEnd) + "\r?\n?"
   Write-Text $ag ([regex]::Replace($text, $pattern, ""))
   Write-Output "AGENTS.md: removed memory instruction block"
+} elseif ($agState -eq "invalid") {
+  Write-Output "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
+} elseif ($text -and $text.Contains("memory MCP server")) {
+  Write-Output "AGENTS.md: has a memory block without markers -- remove it manually"
 }
-Strip-GitIgnoreBlock
+$gitIgnoreText = Read-Text (Path-InTarget ".gitignore")
+$gitIgnoreState = Get-ManagedBlockState $gitIgnoreText $GitIgnoreBegin $GitIgnoreEnd
+if ($gitIgnoreState -eq "valid") {
+  Strip-GitIgnoreBlock
+  Write-Output ".gitignore: removed agent-parity block"
+} elseif ($gitIgnoreState -eq "invalid") {
+  Write-Output ".gitignore: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
+}
 if ($Purge) {
   if (Test-Path -LiteralPath (Path-InTarget $StoreDir)) { Remove-Item -LiteralPath (Path-InTarget $StoreDir) -Recurse -Force }
   Write-Output "memory store: deleted ($(Path-InTarget $StoreDir))"

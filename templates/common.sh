@@ -19,8 +19,8 @@ GI_END="# agent-parity:end"
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.
 ARTIFACTS=".mcp.json .cursor .codex .agents AGENTS.md CLAUDE.md"
-# Cursor CLI reads .cursor/cli.json for tool permissions. We ship it verbatim
-# (not a memory-server merge), so it is wired on its own, outside for_each_config.
+# Cursor CLI reads .cursor/cli.json for tool permissions. It is wired on its
+# own, outside the MCP config list.
 CURSOR_CLI=".cursor/cli.json"
 # Instruction files only one of the four agents reads. They split behavior, so
 # install and status call them out; they belong to the user, so never touched.
@@ -54,9 +54,7 @@ commit_local_temp() {
 }
 
 is_claude_wrapper() {
-  wrapper=$(cat "$1")
-  cr=$(printf '\r')
-  [ "${wrapper%$cr}" = "@AGENTS.md" ]
+  awk 'BEGIN { ok=1; n=0 } { sub(/\r$/, ""); n++; if (n != 1 || $0 != "@AGENTS.md") ok=0 } END { exit !(ok && n == 1) }' "$1"
 }
 
 
@@ -87,15 +85,12 @@ local_config_editor_path() {
 }
 
 # Calls "$1 <path relative to target> <template in repo> <registered-marker>"
-# once per wiring file. install/uninstall/status all derive from this single
-# list. CLAUDE.md is wiring too: Claude Code reads CLAUDE.md, not AGENTS.md,
-# so the instruction block only reaches it through this import wrapper.
-for_each_config() {
+# once per MCP config file.
+for_each_mcp_config() {
   "$1" ".mcp.json"               templates/claude.mcp.json              ".agents/mcp/memory/run.sh"
   "$1" ".cursor/mcp.json"        templates/cursor.mcp.json              ".agents/mcp/memory/run.sh"
   "$1" ".codex/config.toml"      templates/codex.config.toml            ".agents/mcp/memory/run.sh"
   "$1" ".agents/mcp_config.json" templates/antigravity.mcp_config.json  ".agents/mcp/memory/run.sh"
-  "$1" "CLAUDE.md"               templates/CLAUDE.md                    "@AGENTS.md"
 }
 
 installed_version() {
@@ -178,10 +173,27 @@ ignored_artifacts() {
   done
 }
 
+managed_block_state() {
+  file=$1 begin=$2 end=$3
+  [ -e "$file" ] || { echo absent; return; }
+  awk -v b="$begin" -v e="$end" '
+    {
+      line = $0; sub(/\r$/, "", line)
+      if (index(line, b)) begin_hits++
+      if (index(line, e)) end_hits++
+      if (line == b) begin_line = NR
+      if (line == e) end_line = NR
+    }
+    END {
+      if (begin_hits == 0 && end_hits == 0) print "absent"
+      else if (begin_hits == 1 && end_hits == 1 && begin_line > 0 && begin_line < end_line) print "valid"
+      else print "invalid"
+    }
+  ' "$file"
+}
+
 strip_gitignore_block() {
   gi="$TARGET/.gitignore"
-  [ -e "$gi" ] || return 0
-  grep -qF "$GI_BEGIN" "$gi" 2>/dev/null && grep -qF "$GI_END" "$gi" 2>/dev/null || return 0
   make_local_temp_for "$gi"
   awk -v b="$GI_BEGIN" -v e="$GI_END" '
     { line = $0; sub(/\r$/, "", line) }
@@ -287,30 +299,30 @@ status_codex_mcp() {
 # Append the marked instruction block, or rewrite exactly the marked region
 # when it is already there, leaving the rest of the file untouched.
 
-unreg_config() {
+unreg_mcp_config() {
   t="$TARGET/$1"
   [ -e "$t" ] || return 0
-  if [ "$1" = "CLAUDE.md" ]; then
-    if is_claude_wrapper "$t"; then
-      rm "$t"
-      echo "  removed:       $1"
-    fi
-    # The @AGENTS.md import may carry the user's own AGENTS.md content too,
-    # so a CLAUDE.md we did not write verbatim is left alone.
-    return 0
-  elif [ "$3" = ".agents/mcp/memory/run.sh" ]; then
-    result=$("$CONFIG_EDITOR" unmerge "$t" 2>/dev/null) || result=invalid
-    if [ "$result" = changed ]; then
-      echo "  unmerged:      $1 (removed memory server entry, kept the rest)"
-    elif [ "$result" = invalid ]; then
-      echo "  edit manually: $1 -- invalid JSON/TOML"
-    fi
+  result=$("$CONFIG_EDITOR" unmerge "$t" 2>/dev/null) || result=invalid
+  if [ "$result" = changed ]; then
+    echo "  unmerged:      $1 (removed memory server entry, kept the rest)"
+  elif [ "$result" = invalid ]; then
+    echo "  edit manually: $1 -- invalid JSON/TOML"
+  fi
+}
+
+unreg_claude_wrapper() {
+  t="$TARGET/CLAUDE.md"
+  [ -e "$t" ] || return 0
+  if is_claude_wrapper "$t"; then
+    rm "$t"
+    echo "claude wrapper: removed CLAUDE.md"
+  else
+    echo "claude wrapper: existing CLAUDE.md preserved"
   fi
 }
 
 
-
-status_agent_config() {
+status_mcp_registration() {
   label=$1
   rel=$2
   marker=$3
@@ -337,12 +349,6 @@ status_agent_config() {
       echo "  $label: invalid JSON/TOML ($rel)"
     fi
     unset code command
-  elif [ "$rel" = "CLAUDE.md" ]; then
-    if is_claude_wrapper "$t"; then
-      echo "  $label: registered ($rel)"
-    else
-      echo "  $label: not registered ($rel)"
-    fi
   else
     echo "  $label: not registered ($rel)"
   fi
@@ -350,11 +356,21 @@ status_agent_config() {
 
 status_mcp_registrations() {
   echo "mcp registrations:"
-  status_agent_config "Claude Code"      ".mcp.json"               ".agents/mcp/memory/run.sh"
-  status_agent_config "Cursor"           ".cursor/mcp.json"        ".agents/mcp/memory/run.sh"
-  status_agent_config "Codex"            ".codex/config.toml"      ".agents/mcp/memory/run.sh"
-  status_agent_config "Antigravity CLI"  ".agents/mcp_config.json" ".agents/mcp/memory/run.sh"
-  status_agent_config "Claude wrapper"   "CLAUDE.md"               "@AGENTS.md"
+  status_mcp_registration "Claude Code"      ".mcp.json"               ".agents/mcp/memory/run.sh"
+  status_mcp_registration "Cursor"           ".cursor/mcp.json"        ".agents/mcp/memory/run.sh"
+  status_mcp_registration "Codex"            ".codex/config.toml"      ".agents/mcp/memory/run.sh"
+  status_mcp_registration "Antigravity CLI"  ".agents/mcp_config.json" ".agents/mcp/memory/run.sh"
+}
+
+status_claude_wrapper() {
+  t="$TARGET/CLAUDE.md"
+  if [ ! -e "$t" ]; then
+    echo "claude wrapper: missing (CLAUDE.md)"
+  elif is_claude_wrapper "$t"; then
+    echo "claude wrapper: registered (CLAUDE.md)"
+  else
+    echo "claude wrapper: not registered (existing CLAUDE.md preserved)"
+  fi
 }
 
 status_agent_hooks() {

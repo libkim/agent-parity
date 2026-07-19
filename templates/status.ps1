@@ -17,6 +17,7 @@ $latest = Latest-Version
 Write-Output "latest release: $latest"
 Show-UpdateNotice $installed $latest
 Status-McpRegistrations
+Status-ClaudeWrapper
 Status-AgentHooks
 Status-AgentDiagnostics
 Status-Skills
@@ -29,7 +30,12 @@ else {
   else { Write-Output "cursor cli: $CursorCli exists but is not ours (memory allowlist not confirmed)" }
 }
 $agText = Read-Text (Path-InTarget "AGENTS.md")
-if ($agText -and $agText.Contains($MarkBegin) -and $agText.Contains($MarkEnd)) { Write-Output "AGENTS.md: memory block present" } else { Write-Output "AGENTS.md: memory block missing" }
+$agState = Get-ManagedBlockState $agText $MarkBegin $MarkEnd
+if ($agState -eq "valid") { Write-Output "AGENTS.md: memory block present" }
+elseif ($agState -eq "absent") { Write-Output "AGENTS.md: memory block missing" }
+else { Write-Output "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; repair them manually" }
+$gitIgnoreState = Get-ManagedBlockState (Read-Text (Path-InTarget ".gitignore")) $GitIgnoreBegin $GitIgnoreEnd
+if ($gitIgnoreState -eq "invalid") { Write-Output ".gitignore: agent-parity markers are incomplete, duplicated, or out of order; repair them manually" }
 $store = Path-InTarget $StoreDir
 if (Test-Path -LiteralPath $store -PathType Container) {
   $n = @(Get-ChildItem -LiteralPath $store -Filter "*.md" -File).Count

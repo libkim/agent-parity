@@ -1,3 +1,5 @@
+//go:build configeditor
+
 package main
 
 import (
@@ -18,6 +20,8 @@ import (
 // memoryTools names the tools the memory server exposes. Codex auto-approval
 // writes one [mcp_servers.memory.tools.<tool>] table per name.
 var memoryTools = []string{"memory_add", "memory_recent", "memory_search", "memory_get"}
+
+const cursorCLIMemoryPermission = "Mcp(memory:*)"
 
 func writeConfigFile(path string, data []byte, fallbackMode os.FileMode) error {
 	mode := fallbackMode
@@ -298,7 +302,7 @@ func unmergeCursorCLI(path string) error {
 	kept := make([]any, 0, len(allow))
 	changed := false
 	for _, item := range allow {
-		if value, ok := item.(string); ok && value == "Mcp(memory:*)" {
+		if value, ok := item.(string); ok && value == cursorCLIMemoryPermission {
 			changed = true
 			continue
 		}
@@ -326,6 +330,55 @@ func unmergeCursorCLI(path string) error {
 		return err
 	}
 	return writeConfigFile(path, append(out, '\n'), 0o644)
+}
+
+// mergeCursorCLI adds the memory MCP permission to Cursor CLI's exact
+// permissions.allow path while preserving every unrelated setting.
+func mergeCursorCLI(path string) (bool, error) {
+	root := map[string]any{}
+	if _, err := os.Stat(path); err == nil {
+		var readErr error
+		root, readErr = readJSONObject(path)
+		if readErr != nil {
+			return false, readErr
+		}
+	} else if !os.IsNotExist(err) {
+		return false, err
+	}
+
+	permissions, exists := root["permissions"]
+	if !exists {
+		permissions = map[string]any{}
+		root["permissions"] = permissions
+	}
+	permissionMap, ok := permissions.(map[string]any)
+	if !ok {
+		return false, fmt.Errorf("permissions must be a JSON object")
+	}
+
+	allowValue, exists := permissionMap["allow"]
+	if !exists {
+		allowValue = []any{}
+	}
+	allow, ok := allowValue.([]any)
+	if !ok {
+		return false, fmt.Errorf("permissions.allow must be a JSON array")
+	}
+	for _, item := range allow {
+		if item == cursorCLIMemoryPermission {
+			return false, nil
+		}
+	}
+
+	permissionMap["allow"] = append(allow, cursorCLIMemoryPermission)
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	if err := writeConfigFile(path, append(out, '\n'), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func runConfigMutation(path string, mutate func(string) error) (bool, error) {
@@ -936,10 +989,7 @@ func hasAgentHook(path, kind string) (bool, error) {
 		}
 		return false, nil
 	}
-	container := root
-	if kind == "cursor" {
-		container, _ = root["hooks"].(map[string]any)
-	}
+	container := agentHookContainer(root, spec, false)
 	handlers, _ := container[spec.event].([]any)
 	for _, handler := range handlers {
 		hm, _ := handler.(map[string]any)
@@ -958,7 +1008,7 @@ func hasCursorCLIAllowlist(path string) (bool, error) {
 	permissions, _ := root["permissions"].(map[string]any)
 	allow, _ := permissions["allow"].([]any)
 	for _, item := range allow {
-		if item == "Mcp(memory:*)" {
+		if item == cursorCLIMemoryPermission {
 			return true, nil
 		}
 	}
@@ -970,6 +1020,8 @@ type agentHookSpec struct {
 	command        string
 	commandWindows string
 	nested         bool
+	container      string
+	legacyCommands []string
 }
 
 // hookSpec is the single registry for agent-specific hook syntax. Hook merge
@@ -987,11 +1039,72 @@ func hookSpec(kind string) (agentHookSpec, error) {
 			commandWindows: `powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) '.agents/bin/agent-parity.cmd') self-heal"`,
 		}, nil
 	case "cursor":
-		return agentHookSpec{event: "sessionStart", command: ".agents/bin/agent-parity.cmd self-heal"}, nil
+		return agentHookSpec{
+			event: "sessionStart", container: "hooks",
+			command:        ".agents/bin/agent-parity self-heal",
+			legacyCommands: []string{".agents/bin/agent-parity.cmd self-heal"},
+		}, nil
 	case "antigravity":
-		return agentHookSpec{event: "PreInvocation", command: ".agents/bin/agent-parity.cmd self-heal"}, nil
+		return agentHookSpec{
+			event: "PreInvocation", container: "agent-parity",
+			command:        ".agents/bin/agent-parity self-heal",
+			legacyCommands: []string{".agents/bin/agent-parity.cmd self-heal"},
+		}, nil
 	default:
 		return agentHookSpec{}, fmt.Errorf("unsupported hook kind: %s", kind)
+	}
+}
+
+func agentHookCommands(spec agentHookSpec, command, commandWindows string) []string {
+	commands := []string{command, commandWindows}
+	commands = append(commands, spec.legacyCommands...)
+	return commands
+}
+
+func agentHookContainer(root map[string]any, spec agentHookSpec, create bool) map[string]any {
+	if spec.container == "" {
+		return root
+	}
+	container, _ := root[spec.container].(map[string]any)
+	if container == nil && create {
+		container = map[string]any{}
+		root[spec.container] = container
+	}
+	return container
+}
+
+func removeManagedHookHandlers(container map[string]any, event string, commands ...string) bool {
+	if container == nil {
+		return false
+	}
+	handlers, _ := container[event].([]any)
+	kept := make([]any, 0, len(handlers))
+	removed := false
+	for _, handler := range handlers {
+		hm, _ := handler.(map[string]any)
+		command, _ := hm["command"].(string)
+		if isSelfHealCommand(command, commands...) {
+			removed = true
+			continue
+		}
+		kept = append(kept, handler)
+	}
+	if len(kept) == 0 {
+		delete(container, event)
+	} else {
+		container[event] = kept
+	}
+	return removed
+}
+
+// v0.6.0 wrote Antigravity's managed PreInvocation handler at the document
+// root. Move only that exact released command; unrelated root fields remain.
+func removeLegacyAntigravityHook(root map[string]any, commands ...string) {
+	if !removeManagedHookHandlers(root, "PreInvocation", commands...) {
+		return
+	}
+	if len(root) == 1 && root["enabled"] == true {
+		delete(root, "enabled")
 	}
 }
 
@@ -1006,6 +1119,7 @@ func mergeAgentHook(path, kind, command, commandWindows string) error {
 		command = spec.command
 		commandWindows = spec.commandWindows
 	}
+	managedCommands := agentHookCommands(spec, command, commandWindows)
 	raw, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -1032,7 +1146,7 @@ func mergeAgentHook(path, kind, command, commandWindows string) error {
 			for _, handler := range handlers {
 				hm, _ := handler.(map[string]any)
 				old, _ := hm["command"].(string)
-				if !isSelfHealCommand(old, command, commandWindows) {
+				if !isSelfHealCommand(old, managedCommands...) {
 					continue
 				}
 				hm["type"] = "command"
@@ -1062,25 +1176,18 @@ func mergeAgentHook(path, kind, command, commandWindows string) error {
 			}
 		}
 		if kind == "antigravity" {
-			if _, exists := root["enabled"]; !exists {
-				root["enabled"] = true
-			}
+			removeLegacyAntigravityHook(root, managedCommands...)
 		}
-		container := root
-		if kind == "cursor" {
-			hooks, _ := root["hooks"].(map[string]any)
-			if hooks == nil {
-				hooks = map[string]any{}
-			}
-			root["hooks"] = hooks
-			container = hooks
+		container := agentHookContainer(root, spec, true)
+		if kind == "antigravity" {
+			container["enabled"] = true
 		}
 		handlers, _ := container[spec.event].([]any)
 		found := false
 		for _, handler := range handlers {
 			hm, _ := handler.(map[string]any)
 			old, _ := hm["command"].(string)
-			if isSelfHealCommand(old, command, commandWindows) {
+			if isSelfHealCommand(old, managedCommands...) {
 				hm["command"] = command
 				hm["timeout"] = 30
 				found = true
@@ -1149,31 +1256,20 @@ func unmergeAgentHook(path, kind string) error {
 			delete(root, "hooks")
 		}
 	} else {
-		container := root
-		if kind == "cursor" {
-			container, _ = root["hooks"].(map[string]any)
-		}
-		handlers, _ := container[spec.event].([]any)
-		kept := []any{}
-		for _, handler := range handlers {
-			hm, _ := handler.(map[string]any)
-			cmd, _ := hm["command"].(string)
-			if !isSelfHealCommand(cmd, spec.command, spec.commandWindows) {
-				kept = append(kept, handler)
+		managedCommands := agentHookCommands(spec, spec.command, spec.commandWindows)
+		container := agentHookContainer(root, spec, false)
+		removeManagedHookHandlers(container, spec.event, managedCommands...)
+		if kind == "antigravity" {
+			removeLegacyAntigravityHook(root, managedCommands...)
+			if len(container) == 1 && container["enabled"] == true {
+				delete(root, spec.container)
 			}
-		}
-		if len(kept) == 0 {
-			delete(container, spec.event)
-		} else {
-			container[spec.event] = kept
-		}
-		if kind == "cursor" && len(container) == 0 {
-			delete(root, "hooks")
+		} else if container != nil && len(container) == 0 {
+			delete(root, spec.container)
 		}
 	}
 	if len(root) == 0 ||
-		(kind == "cursor" && len(root) == 1 && root["version"] == json.Number("1")) ||
-		(kind == "antigravity" && len(root) == 1 && root["enabled"] == true) {
+		(kind == "cursor" && len(root) == 1 && root["version"] == json.Number("1")) {
 		return os.Remove(path)
 	}
 	out, err := json.MarshalIndent(root, "", "  ")

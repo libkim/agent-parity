@@ -19,6 +19,7 @@ latest=$(latest_version)
 echo "latest release: $latest"
 show_update_notice "$installed" "$latest"
 status_mcp_registrations
+status_claude_wrapper
 status_agent_hooks
 status_agent_diagnostics
 status_skills
@@ -34,10 +35,16 @@ else
   echo "cursor cli: $CURSOR_CLI exists but is not ours (memory allowlist not confirmed)"
 fi
 ag="$TARGET/AGENTS.md"
-if [ -e "$ag" ] && grep -qF "$MARK_BEGIN" "$ag" 2>/dev/null && grep -qF "$MARK_END" "$ag" 2>/dev/null; then
-  echo "AGENTS.md: memory block present"
-else
-  echo "AGENTS.md: memory block missing"
+ag_state=$(managed_block_state "$ag" "$MARK_BEGIN" "$MARK_END")
+case "$ag_state" in
+  valid) echo "AGENTS.md: memory block present" ;;
+  absent) echo "AGENTS.md: memory block missing" ;;
+  invalid) echo "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; repair them manually" ;;
+esac
+gi="$TARGET/.gitignore"
+gi_state=$(managed_block_state "$gi" "$GI_BEGIN" "$GI_END")
+if [ "$gi_state" = invalid ]; then
+  echo ".gitignore: agent-parity markers are incomplete, duplicated, or out of order; repair them manually"
 fi
 if [ -d "$TARGET/$STORE_DIR" ]; then
   n=$(find "$TARGET/$STORE_DIR" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')

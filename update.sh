@@ -3,6 +3,7 @@
 set -eu
 
 REPO="libkim/agent-parity"
+PACKAGED_VERSION="dev"
 # Overridable for forks and local testing (file:// URLs work).
 RAW="${AGENT_PARITY_RAW:-}"
 RELEASE="${AGENT_PARITY_RELEASE:-}"
@@ -23,8 +24,8 @@ GI_END="# agent-parity:end"
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.
 ARTIFACTS=".mcp.json .cursor .codex .agents AGENTS.md CLAUDE.md"
-# Cursor CLI reads .cursor/cli.json for tool permissions. We ship it verbatim
-# (not a memory-server merge), so it is wired on its own, outside for_each_config.
+# Cursor CLI reads .cursor/cli.json for tool permissions. It is wired on its
+# own, outside the MCP config list.
 CURSOR_CLI=".cursor/cli.json"
 # Instruction files only one of the four agents reads. They split behavior, so
 # install and status call them out; they belong to the user, so never touched.
@@ -102,15 +103,12 @@ platform() {
 }
 
 # Calls "$1 <path relative to target> <template in repo> <registered-marker>"
-# once per wiring file. install/uninstall/status all derive from this single
-# list. CLAUDE.md is wiring too: Claude Code reads CLAUDE.md, not AGENTS.md,
-# so the instruction block only reaches it through this import wrapper.
-for_each_config() {
+# once per MCP config file.
+for_each_mcp_config() {
   "$1" ".mcp.json"               templates/claude.mcp.json              ".agents/mcp/memory/run.sh"
   "$1" ".cursor/mcp.json"        templates/cursor.mcp.json              ".agents/mcp/memory/run.sh"
   "$1" ".codex/config.toml"      templates/codex.config.toml            ".agents/mcp/memory/run.sh"
   "$1" ".agents/mcp_config.json" templates/antigravity.mcp_config.json  ".agents/mcp/memory/run.sh"
-  "$1" "CLAUDE.md"               templates/CLAUDE.md                    "@AGENTS.md"
 }
 
 installed_version() {
@@ -119,34 +117,12 @@ installed_version() {
   tr -d '\r\n' < "$version_file"
 }
 
-latest_version() {
-  # The /releases/latest redirect lands on .../releases/tag/<version>.
-  u=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" 2>/dev/null) || { echo "unknown"; return; }
-  case "$u" in
-    */tag/*) echo "${u##*/}" ;;
-    *) echo "unknown" ;;
-  esac
-}
-
-# Pin scripts, templates, and binaries to one release tag. The project launcher
-# passes both URLs explicitly; direct invocation resolves them here. There is
-# deliberately no main fallback.
-if [ -z "$RAW" ] || [ -z "$RELEASE" ]; then
-  PINNED_TAG=$(latest_version)
-  case "$PINNED_TAG" in
-    v*)
-      [ -n "$RAW" ]     || RAW="https://raw.githubusercontent.com/$REPO/$PINNED_TAG"
-      [ -n "$RELEASE" ] || RELEASE="https://github.com/$REPO/releases/download/$PINNED_TAG"
-      ;;
-    *) echo "could not resolve latest agent-parity release" >&2; exit 1 ;;
-  esac
-fi
-
+# Release assets have PACKAGED_VERSION replaced with their tag by build.sh.
+# The latest asset URL is resolved before this script starts, so this script
+# never performs a second latest-release lookup.
 if [ -z "$VERSION" ]; then
-  case "${RAW%/}" in
-    */v*) VERSION=${RAW%/}; VERSION=${VERSION##*/} ;;
-    *) VERSION=dev ;;
-  esac
+  [ "$PACKAGED_VERSION" != dev ] || { echo "unpackaged update.sh requires AGENT_PARITY_VERSION" >&2; exit 1; }
+  VERSION=$PACKAGED_VERSION
 fi
 case "$VERSION" in
   v[0-9A-Za-z._-]* | dev) ;;
@@ -155,6 +131,8 @@ esac
 case "$VERSION" in
   *[!0-9A-Za-z._-]*) echo "invalid agent-parity release version: $VERSION" >&2; exit 1 ;;
 esac
+[ -n "$RAW" ]     || RAW="https://raw.githubusercontent.com/$REPO/$VERSION"
+[ -n "$RELEASE" ] || RELEASE="https://github.com/$REPO/releases/download/$VERSION"
 
 
 install_project_cli() {
@@ -190,6 +168,7 @@ install_config_editor() {
   fi
   [ "$actual" = "$expected" ] || { echo "checksum mismatch for $asset" >&2; exit 1; }
   mv -f "$TEMP_DIR/$asset" "$d/$asset"
+  CONFIG_EDITOR="$d/$asset"
   rm -f "$TEMP_DIR/checksums.txt"
   rmdir "$TEMP_DIR"
   TEMP_DIR=""
@@ -211,19 +190,18 @@ install_server() {
   fi
   write_value_to "$TEMP_DIR/VERSION" "$VERSION"
   write_value_to "$TEMP_DIR/RELEASE" "${RELEASE%/}"
-  "$TEMP_DIR/run.sh" -version >/dev/null
   for name in run.sh run.cmd VERSION RELEASE; do
     mv -f "$TEMP_DIR/$name" "$dest/$name"
   done
   rmdir "$TEMP_DIR"
   TEMP_DIR=""
-  # Remove a legacy vendored copy only after the verified cache and launchers
-  # are ready.
+  # Remove a legacy vendored copy only after the pinned launchers and release
+  # metadata are ready. The shared MCP binary is downloaded on first launch.
   rm -rf "$dest/dist"
-  echo "server: pinned $VERSION (current platform binary verified in the shared cache)"
+  echo "server: pinned $VERSION (current platform binary downloads on first MCP launch)"
 }
 
-reg_config() {
+reg_mcp_config() {
   t="$TARGET/$1"
   c=$(fetch "$2")
   if [ ! -e "$t" ]; then
@@ -231,19 +209,17 @@ reg_config() {
     printf '%s\n' "$c" > "$t"
     echo "  wrote:      $1"
   elif [ "$3" = ".agents/mcp/memory/run.sh" ]; then
-    cache_root=${AGENT_PARITY_CACHE:-${XDG_CACHE_HOME:-${HOME:?HOME is not set}/.cache}/agent-parity}
-    editor="$cache_root/config/$VERSION/agent-parity-config-${goos}-${goarch}"
-    current=$("$editor" command "$t" 2>/dev/null) || code=$?
+    current=$("$CONFIG_EDITOR" command "$t" 2>/dev/null) || code=$?
     code=${code:-0}
     if [ "$code" -eq 0 ] && [ "$current" = "$3" ]; then
       echo "  registered: $1 (already)"
     elif [ "$code" -eq 0 ] && { [ "$current" = ".agents/mcp/memory/run.sh" ] || [ "$current" = ".agents/mcp/memory/run.cmd" ]; }; then
-      result=$("$editor" ensure "$t" "$3")
+      result=$("$CONFIG_EDITOR" ensure "$t" "$3")
       if [ "$result" = changed ]; then echo "  retargeted: $1 (launcher -> Unix launcher)"; else echo "  registered: $1 (already)"; fi
     elif [ "$code" -eq 0 ]; then
       echo "  exists:     $1 -- its memory entry points at a different server; replace it with:"
       printf '%s\n' "$c" | sed 's/^/    | /'
-    elif [ "$code" -eq 1 ] && "$editor" ensure "$t" "$3" >/dev/null; then
+    elif [ "$code" -eq 1 ] && "$CONFIG_EDITOR" ensure "$t" "$3" >/dev/null; then
       echo "  merged:     $1 (added memory server entry)"
     else
       echo "  exists:     $1 -- invalid JSON/TOML; merge this in:"
@@ -258,31 +234,37 @@ reg_config() {
   fi
 }
 
-# Cursor CLI permission allowlist: a verbatim file we own outright. Write it
-# when absent; if a different cli.json already exists it is the user's, so leave
-# it and print the snippet to merge. update re-runs this and is idempotent.
-reg_cursor_cli() {
-  t="$TARGET/$CURSOR_CLI"
-  c=$(fetch templates/cursor.cli.json)
+reg_claude_wrapper() {
+  t="$TARGET/CLAUDE.md"
   if [ ! -e "$t" ]; then
-    mkdir -p "$(dirname "$t")"
-    printf '%s\n' "$c" > "$t"
-    echo "  wrote:      $CURSOR_CLI"
-  elif [ "$(cat "$t")" = "$c" ]; then
-    echo "  registered: $CURSOR_CLI (already)"
+    printf '%s\n' '@AGENTS.md' > "$t"
+    echo "claude wrapper: wrote CLAUDE.md"
+  elif awk 'BEGIN { ok=1; n=0 } { sub(/\r$/, ""); n++; if (n != 1 || $0 != "@AGENTS.md") ok=0 } END { exit !(ok && n == 1) }' "$t"; then
+    echo "claude wrapper: registered (CLAUDE.md)"
   else
-    echo "  exists:     $CURSOR_CLI -- merge this in:"
-    printf '%s\n' "$c" | sed 's/^/    | /'
+    echo "claude wrapper: existing CLAUDE.md preserved; expected exact content: @AGENTS.md"
   fi
 }
 
+reg_cursor_cli() {
+  t="$TARGET/$CURSOR_CLI"
+  result=$("$CONFIG_EDITOR" merge-cursor-cli "$t") || {
+    echo "could not safely merge $CURSOR_CLI" >&2
+    exit 1
+  }
+  case "$result" in
+    changed) echo "  merged:     $CURSOR_CLI (added memory allowlist entry)" ;;
+    unchanged) echo "  registered: $CURSOR_CLI (already)" ;;
+    *) echo "unexpected config editor result for $CURSOR_CLI: $result" >&2; exit 1 ;;
+  esac
+}
+
 reg_agent_hooks() {
-  bin="$TARGET/$SERVER_DIR/run.sh"
-  "$bin" -merge-agent-hook "$TARGET/$CLAUDE_SRC" -hook-kind claude
-  "$bin" -merge-agent-hook "$TARGET/$CLAUDE_TGT" -hook-kind claude
-  "$bin" -merge-agent-hook "$TARGET/.codex/hooks.json" -hook-kind codex
-  "$bin" -merge-agent-hook "$TARGET/.cursor/hooks.json" -hook-kind cursor
-  "$bin" -merge-agent-hook "$TARGET/.agents/hooks.json" -hook-kind antigravity
+  "$CONFIG_EDITOR" merge-hook "$TARGET/$CLAUDE_SRC" claude
+  "$CONFIG_EDITOR" merge-hook "$TARGET/$CLAUDE_TGT" claude
+  "$CONFIG_EDITOR" merge-hook "$TARGET/.codex/hooks.json" codex
+  "$CONFIG_EDITOR" merge-hook "$TARGET/.cursor/hooks.json" cursor
+  "$CONFIG_EDITOR" merge-hook "$TARGET/.agents/hooks.json" antigravity
   echo "  hooks:      Claude, Codex, Cursor, Antigravity self-heal registered"
   echo "  note:       Codex requires review/trust for the project hook before it runs"
 }
@@ -301,10 +283,27 @@ ignored_artifacts() {
   done
 }
 
+managed_block_state() {
+  file=$1 begin=$2 end=$3
+  [ -e "$file" ] || { echo absent; return; }
+  awk -v b="$begin" -v e="$end" '
+    {
+      line = $0; sub(/\r$/, "", line)
+      if (index(line, b)) begin_hits++
+      if (index(line, e)) end_hits++
+      if (line == b) begin_line = NR
+      if (line == e) end_line = NR
+    }
+    END {
+      if (begin_hits == 0 && end_hits == 0) print "absent"
+      else if (begin_hits == 1 && end_hits == 1 && begin_line > 0 && begin_line < end_line) print "valid"
+      else print "invalid"
+    }
+  ' "$file"
+}
+
 strip_gitignore_block() {
   gi="$TARGET/.gitignore"
-  [ -e "$gi" ] || return 0
-  grep -qF "$GI_BEGIN" "$gi" 2>/dev/null && grep -qF "$GI_END" "$gi" 2>/dev/null || return 0
   TEMP_FILE=$(make_temp_for "$gi")
   awk -v b="$GI_BEGIN" -v e="$GI_END" '
     { line = $0; sub(/\r$/, "", line) }
@@ -320,7 +319,15 @@ strip_gitignore_block() {
 # of un-ignore rules; recompute it from scratch each run so it stays minimal.
 sync_gitignore() {
   in_git_repo || return 0
-  strip_gitignore_block
+  gi="$TARGET/.gitignore"
+  state=$(managed_block_state "$gi" "$GI_BEGIN" "$GI_END")
+  case "$state" in
+    valid) strip_gitignore_block ;;
+    invalid)
+      echo ".gitignore: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually" >&2
+      return 0
+      ;;
+  esac
   # Legacy installs may still have a vendored dist directory. Keep it out of
   # Git even if an interrupted migration leaves files behind.
   rules="/.agents/mcp/memory/dist/
@@ -408,7 +415,7 @@ install_skills() {
     cp "$TARGET/$CLAUDE_TGT" "$src"
     echo "  migrated:   $CLAUDE_TGT -> $CLAUDE_SRC"
   fi
-  if "$TARGET/$SERVER_DIR/run.sh" -merge-claude-settings "$src" -hook-command "$CLAUDE_HOOK"; then
+  if "$CONFIG_EDITOR" merge-claude-settings "$src" "$CLAUDE_HOOK"; then
     echo "  merged:     $CLAUDE_SRC (memory keys + sync hook)"
   else
     echo "  warn:       could not merge $CLAUDE_SRC" >&2
@@ -420,7 +427,8 @@ install_skills() {
 sync_agents_block() {
   ag="$TARGET/AGENTS.md"
   snip=$(fetch templates/AGENTS.snippet.md)
-  if [ -e "$ag" ] && grep -qF "$MARK_BEGIN" "$ag" 2>/dev/null && grep -qF "$MARK_END" "$ag" 2>/dev/null; then
+  state=$(managed_block_state "$ag" "$MARK_BEGIN" "$MARK_END")
+  if [ "$state" = valid ]; then
     cur=$(awk -v b="$MARK_BEGIN" -v e="$MARK_END" '
       { line = $0; sub(/\r$/, "", line) }
       line == b { inblock = 1 } inblock { print } line == e { exit }
@@ -439,12 +447,14 @@ sync_agents_block() {
     ' - "$ag" > "$TEMP_FILE"
     commit_temp "$ag"
     echo "AGENTS.md: refreshed memory instruction block"
-  else
+  elif [ "$state" = absent ]; then
     if [ -e "$ag" ] && grep -qE "memory_(recent|add|search|get)" "$ag" 2>/dev/null; then
       echo "AGENTS.md: note -- existing text already mentions the memory tools; check it against the appended block for duplication"
     fi
     { printf '\n%s\n' "$snip"; } >> "$ag"
     echo "AGENTS.md: appended memory instruction block"
+  else
+    echo "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually" >&2
   fi
 }
 
@@ -478,8 +488,9 @@ cmd_update() {
   install_project_cli
   install_config_editor
   echo "configs:"
-  for_each_config reg_config
+  for_each_mcp_config reg_mcp_config
   reg_cursor_cli
+  reg_claude_wrapper
   install_skills
   reg_agent_hooks
   sync_agents_block
