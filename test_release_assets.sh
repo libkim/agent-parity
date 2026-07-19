@@ -42,6 +42,12 @@ for readme in "$repo/README.md" "$repo/README.ko.md"; do
   grep -qF '`memory-mcp`' "$readme"
   grep -qF '`agent-parity-config`' "$readme"
 done
+grep -qF '**Dependency-free**' "$repo/README.md"
+grep -qF '**Non-invasive**' "$repo/README.md"
+grep -qF '**Zero-install**' "$repo/README.md"
+grep -qF '**의존성 없음**' "$repo/README.ko.md"
+grep -qF '**비침습**' "$repo/README.ko.md"
+grep -qF '**무설치**' "$repo/README.ko.md"
 ! grep -qiF 'single static binary' "$repo/README.md"
 ! grep -qF '정적 바이너리 하나' "$repo/README.ko.md"
 

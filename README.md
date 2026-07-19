@@ -18,16 +18,16 @@ the same skills and instructions (`AGENTS.md`).
 
 ## Features
 
-- **Runtime-free** — uses two static native executables: `memory-mcp` serves
+- **Dependency-free** — uses two static native executables: `memory-mcp` serves
   memory, while `agent-parity-config` safely edits JSON/TOML; no Go, Node, or
   Python runtime is required.
-- **Project-scoped configuration** — changes project settings only and never
+- **Non-invasive** — changes project settings only and never
   edits global agent settings. Release executables live in a per-user cache
   shared across projects.
-- **Repository-portable** — commits the wiring, release metadata, memory, and
-  skills. The MCP server downloads on first use; on a fresh machine, run
-  install/update once to provision the local config editor used by management
-  commands and self-heal.
+- **Zero-install** — commit the installed wiring once and a fresh machine needs
+  no install or update command. The first agent session automatically downloads
+  and verifies the current platform executables; after a cross-OS repair, only
+  an agent-session restart is needed.
 
 ## Supported agents (tested 2026-07-10)
 
@@ -133,7 +133,7 @@ whether that session currently exposes the memory tools.
 |  | `config missing` | The agent config file is absent. |
 |  | `not registered` | The config file exists but has no usable entry for this install. |
 | `agent-specific diagnostics` | CLI found / not found, registration result | Extra checks offered by the installed agent CLI. These are not a check of the current agent session's tool visibility. |
-| `self-heal hooks` | `registered` / `missing` | Whether each agent's lifecycle hook can retarget the memory launcher. Claude and Codex use `SessionStart`, Cursor uses `sessionStart`, and Antigravity uses `PreInvocation`. Codex requires the project hook to be reviewed and trusted. |
+| `self-heal hooks` | `registered` / `missing` | Whether the managed hooks can retarget the memory launcher. Claude and Codex use `SessionStart`, Cursor uses `sessionStart`, and Antigravity uses `PreInvocation`. Codex requires the project hook to be reviewed and trusted. |
 | `skills` | `<n> in .agents/skills; sync script present` | Shared skill source and Claude sync script are installed. |
 |  | `sync wiring missing` | The Claude skill-sync script is absent. |
 | `hook` | `registered` / `missing` | Whether Claude's session-start hook will sync skills into `.claude/skills`. |
@@ -157,11 +157,12 @@ The portable wiring, release metadata, memory, and skills are committed to the
 repo; MCP binaries are not. On first use, `run.sh` / `run.cmd` downloads only
 the current platform's binary from the project's pinned release, verifies it
 against `checksums.txt`, and stores it in a per-user cache shared by projects.
-Install/update also places the current platform's `agent-parity-config` editor
-in that shared cache. Configuration-related management commands and self-heal
-use it to parse and edit JSON/TOML without starting or downloading the MCP
-server. `status` and `version` make only a bounded network request for the
-latest-release field.
+Install/update also places the current platform's small `agent-parity-config`
+editor in that shared cache. On a fresh pull with an empty cache, self-heal
+downloads and verifies the same pinned editor automatically. Configuration-related
+management commands use the cached editor to parse and edit JSON/TOML without
+starting or downloading the MCP server. `status` and `version` make only a
+bounded network request for the latest-release field.
 The default cache is `$XDG_CACHE_HOME/agent-parity` (or
 `~/.cache/agent-parity`) on Unix and `%LOCALAPPDATA%\agent-parity\cache` on
 Windows; `AGENT_PARITY_CACHE` overrides it. `uninstall` leaves this shared
@@ -188,16 +189,17 @@ the shared folder — keeps its skills without the sync.
 
 ### Cross-OS self-heal
 
-The committed MCP configs point to either `run.sh` or `run.cmd`. Managed
-lifecycle hooks inspect all four configs and change only an agent-parity-owned
+The committed MCP configs point to either `run.sh` or `run.cmd`. The managed
+hooks inspect all four configs and change only an agent-parity-owned
 `memory` command to the launcher for the current OS. Claude and Codex run this
 at `SessionStart`, Cursor at `sessionStart`, and Antigravity at
 `PreInvocation`. A user-supplied `memory` server is never overwritten. When a
 file changes, the hook asks you to restart the current agent session because
 MCP tools may already have loaded before the repair; an unchanged run is
-silent. The repair uses only the installed local script and config editor; it
-never downloads or starts the MCP server binary. Codex project hooks must be
-reviewed and trusted with `/hooks` (or the Hooks UI) before they run.
+silent. With an empty cache, the hook downloads and verifies only the pinned
+config editor; it never downloads or starts the MCP server binary. Codex
+project hooks must be reviewed and trusted with `/hooks` (or the Hooks UI)
+before they run.
 
 ### Memory
 

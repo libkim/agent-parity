@@ -12,12 +12,8 @@ SCRIPT_DIR=$here
 TARGET=$target
 . "$here/common.sh"
 platform
-editor=$(local_config_editor_path) || editor=""
-
-[ -x "$editor" ] || {
-  echo "agent-parity local config editor is missing: $editor" >&2
-  exit 1
-}
+ensure_local_config_editor
+editor=$CONFIG_EDITOR
 
 ensure_config() {
   rel=$1

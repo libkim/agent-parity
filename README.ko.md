@@ -13,16 +13,16 @@
 
 ## 특징
 
-- **별도 런타임 없음** — 메모리를 제공하는 `memory-mcp`와 JSON/TOML을
+- **의존성 없음** — 메모리를 제공하는 `memory-mcp`와 JSON/TOML을
   안전하게 수정하는 `agent-parity-config`, 두 개의 정적 네이티브 실행 파일을
   사용합니다. Go·Node·Python 런타임은 필요하지 않습니다.
-- **프로젝트 범위 설정** — 프로젝트 설정만 변경하고 에이전트 전역 설정은
+- **비침습** — 프로젝트 설정만 변경하고 에이전트 전역 설정은
   건드리지 않습니다. 릴리스 실행 파일은 여러 프로젝트가 공유하는 사용자별
   캐시에 저장합니다.
-- **저장소 이식성** — 배선, 릴리스 메타데이터, 메모리와 스킬을 커밋합니다.
-  MCP 서버는 처음 사용할 때 내려받습니다. 새 머신에서는 관리 명령과
-  self-heal에 필요한 로컬 설정 편집기를 준비하도록 install/update를 한 번
-  실행해야 합니다.
+- **무설치** — 설치된 배선을 한 번 커밋하면 새 머신에서 install이나 update
+  명령을 실행할 필요가 없습니다. 첫 에이전트 세션이 현재 플랫폼 실행 파일을
+  자동으로 내려받아 검증하며, 크로스 OS 교정 뒤에는 에이전트 세션만 재시작하면
+  됩니다.
 
 ## 지원 에이전트 (2026-07-10 검증 기준)
 
@@ -113,7 +113,7 @@ irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 
 |  | `config missing` | 에이전트 설정 파일이 없습니다. |
 |  | `not registered` | 설정 파일은 있지만 이 설치본에 쓸 수 있는 등록 항목이 없습니다. |
 | `agent-specific diagnostics` | CLI 있음/없음, 등록 결과 | 설치된 에이전트 CLI가 제공하는 추가 검사입니다. 현재 에이전트 세션의 도구 노출 여부를 검사하지는 않습니다. |
-| `self-heal hooks` | `registered` / `missing` | 각 에이전트의 생명주기 훅이 메모리 런처를 재지정할 수 있는지 여부입니다. Claude와 Codex는 `SessionStart`, Cursor는 `sessionStart`, Antigravity는 `PreInvocation`을 사용합니다. Codex 프로젝트 훅은 사용자가 검토하고 신뢰해야 합니다. |
+| `self-heal hooks` | `registered` / `missing` | 관리 훅이 메모리 런처를 재지정할 수 있는지 여부입니다. Claude와 Codex는 `SessionStart`, Cursor는 `sessionStart`, Antigravity는 `PreInvocation`을 사용합니다. Codex 프로젝트 훅은 사용자가 검토하고 신뢰해야 합니다. |
 | `skills` | `<n> in .agents/skills; sync script present` | 공유 스킬 원본과 Claude 동기화 스크립트가 설치돼 있습니다. |
 |  | `sync wiring missing` | Claude 스킬 동기화 스크립트가 없습니다. |
 | `hook` | `registered` / `missing` | Claude 세션 시작 훅이 `.claude/skills`로 스킬을 동기화하는지 여부입니다. |
@@ -131,13 +131,13 @@ irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 
 
 ## 동작 방식
 
-이식 가능한 배선, 릴리스 메타데이터, 메모리와 스킬은 저장소에 커밋하지만 MCP 바이너리는 커밋하지 않습니다. `run.sh` / `run.cmd`는 처음 사용할 때 프로젝트에 고정된 릴리스에서 현재 플랫폼 바이너리 하나만 내려받고 `checksums.txt`로 검증한 뒤 프로젝트들이 공유하는 사용자 캐시에 저장합니다. install/update는 같은 캐시에 현재 플랫폼용 `agent-parity-config` 편집기도 설치합니다. 설정을 다루는 관리 명령과 self-heal은 이 편집기로 JSON/TOML을 파싱하고 수정하므로 MCP 서버를 시작하거나 내려받지 않습니다. `status`와 `version`은 최신 릴리스 필드를 확인하는 제한된 네트워크 요청만 수행합니다. 기본 캐시는 Unix에서 `$XDG_CACHE_HOME/agent-parity`(없으면 `~/.cache/agent-parity`), Windows에서 `%LOCALAPPDATA%\agent-parity\cache`이며 `AGENT_PARITY_CACHE`로 바꿀 수 있습니다. `uninstall`은 공유 캐시를 지우지 않습니다. Claude 산출물은 `.agents/`에서 생성합니다. `.claude/skills/`는 Git에서 제외하지만, 생성된 `.claude/settings.json`은 커밋하여 새로 받은 저장소에도 다시 생성하는 데 필요한 훅이 있도록 합니다. `.gitignore`가 추적할 배선 파일을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. Git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
+이식 가능한 배선, 릴리스 메타데이터, 메모리와 스킬은 저장소에 커밋하지만 MCP 바이너리는 커밋하지 않습니다. `run.sh` / `run.cmd`는 처음 사용할 때 프로젝트에 고정된 릴리스에서 현재 플랫폼 바이너리 하나만 내려받고 `checksums.txt`로 검증한 뒤 프로젝트들이 공유하는 사용자 캐시에 저장합니다. install/update는 같은 캐시에 현재 플랫폼용 소형 `agent-parity-config` 편집기도 설치합니다. 빈 캐시에서 처음 실행되는 self-heal도 동일하게 고정된 편집기를 자동으로 내려받아 검증합니다. 설정을 다루는 관리 명령은 캐시된 편집기로 JSON/TOML을 파싱하고 수정하므로 MCP 서버를 시작하거나 내려받지 않습니다. `status`와 `version`은 최신 릴리스 필드를 확인하는 제한된 네트워크 요청만 수행합니다. 기본 캐시는 Unix에서 `$XDG_CACHE_HOME/agent-parity`(없으면 `~/.cache/agent-parity`), Windows에서 `%LOCALAPPDATA%\agent-parity\cache`이며 `AGENT_PARITY_CACHE`로 바꿀 수 있습니다. `uninstall`은 공유 캐시를 지우지 않습니다. Claude 산출물은 `.agents/`에서 생성합니다. `.claude/skills/`는 git에서 제외하지만, 생성된 `.claude/settings.json`은 커밋하여 새로 받은 저장소에도 다시 생성하는 데 필요한 훅이 있도록 합니다. `.gitignore`가 추적할 배선 파일을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
 
 agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 에이전트 설정과 Claude 설정에는 자기 항목만 병합하므로, 그 안의 다른 설정과 사용자가 다른 서버로 바꿔 둔 `memory` 항목은 보존됩니다. `AGENTS.md`·`.gitignore`의 마커 블록과 생성 shim(런처, 동기화 스크립트, 관리 명령, `agent-parity` 스킬)은 `update`가 최신 상태로 다시 만드니 그 사본은 직접 고치지 마세요. `uninstall`은 자신이 넣은 것을 제거합니다. 메모리 저장소와 `.agents/skills/`의 사용자 스킬은 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 에이전트별 폴더(`.claude`·`.codex`·`.cursor`의 `skills/`)에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 합니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
 
 ### 크로스 OS self-heal
 
-커밋된 MCP 설정은 `run.sh` 또는 `run.cmd` 중 하나를 가리킵니다. 관리되는 생명주기 훅은 네 설정을 검사하고, agent-parity가 소유한 `memory` 명령만 현재 OS용 런처로 바꿉니다. Claude와 Codex는 `SessionStart`, Cursor는 `sessionStart`, Antigravity는 `PreInvocation`에서 실행합니다. 사용자가 직접 등록한 다른 `memory` 서버는 덮어쓰지 않습니다. 설정이 바뀌면 MCP 도구가 교정 전에 이미 로드됐을 수 있으므로 현재 에이전트 세션을 재시작하라고 안내하며, 변경이 없으면 아무것도 출력하지 않습니다. 교정은 설치된 로컬 스크립트와 설정 편집기만 사용하며 MCP 서버 바이너리를 다운로드하거나 실행하지 않습니다. Codex 프로젝트 훅은 실행 전에 `/hooks` 또는 Hooks UI에서 검토하고 신뢰해야 합니다.
+커밋된 MCP 설정은 `run.sh` 또는 `run.cmd` 중 하나를 가리킵니다. 관리 훅은 네 설정을 검사하고, agent-parity가 소유한 `memory` 명령만 현재 OS용 런처로 바꿉니다. Claude와 Codex는 `SessionStart`, Cursor는 `sessionStart`, Antigravity는 `PreInvocation`에서 실행합니다. 사용자가 직접 등록한 다른 `memory` 서버는 덮어쓰지 않습니다. 설정이 바뀌면 MCP 도구가 교정 전에 이미 로드됐을 수 있으므로 현재 에이전트 세션을 재시작하라고 안내하며, 변경이 없으면 아무것도 출력하지 않습니다. 빈 캐시에서는 고정된 설정 편집기만 내려받아 검증하며 MCP 서버 바이너리는 다운로드하거나 실행하지 않습니다. Codex 프로젝트 훅은 실행 전에 `/hooks` 또는 Hooks UI에서 검토하고 신뢰해야 합니다.
 
 ### 메모리
 

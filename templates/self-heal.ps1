@@ -8,9 +8,7 @@ $desired = ".agents/mcp/memory/run.cmd"
 $changed = 0
 $failed = 0
 
-if (!(Test-Path -LiteralPath $editor -PathType Leaf)) {
-  throw "agent-parity local config editor is missing: $editor"
-}
+Ensure-LocalConfigEditor
 
 foreach ($rel in @(".mcp.json", ".cursor/mcp.json", ".codex/config.toml", ".agents/mcp_config.json")) {
   $path = Join-Path $target ($rel.Replace('/', '\'))

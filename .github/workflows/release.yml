@@ -25,6 +25,7 @@ jobs:
       - run: sh test_uninstall.sh
       - run: sh test_install_markers.sh
       - run: sh test_readme_install.sh "${{ github.ref_name }}"
+      - run: sh test_zero_install.sh "${{ github.ref_name }}"
 
   test-windows:
     runs-on: windows-latest
@@ -48,6 +49,8 @@ jobs:
         run: .\test_claude_wrapper.ps1
       - shell: powershell
         run: .\test_install_windows.ps1 "${{ github.ref_name }}"
+      - shell: powershell
+        run: .\test_zero_install_windows.ps1 "${{ github.ref_name }}"
       - shell: bash
         run: sh test_git_bash.sh
 

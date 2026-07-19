@@ -97,6 +97,40 @@ function Require-LocalConfigEditor {
   }
 }
 
+# Only self-heal calls this network-capable resolver. Other local management
+# commands keep using Require-LocalConfigEditor, so uninstall stays offline.
+function Ensure-LocalConfigEditor {
+  if (Test-Path -LiteralPath $ConfigEditor -PathType Leaf) { return }
+  if ($env:AGENT_PARITY_CONFIG_EDITOR) { throw "missing local config editor: $ConfigEditor" }
+  if ($editorVersion -notmatch '^(v[0-9A-Za-z._-]+|dev)$') { throw "invalid agent-parity release version: $editorVersion" }
+
+  $releasePath = Path-InTarget "$ServerDir/RELEASE"
+  if (!(Test-Path -LiteralPath $releasePath -PathType Leaf)) { throw "missing pinned release URL: $releasePath" }
+  $release = (Read-Text $releasePath).Trim()
+  if (!$release) { throw "empty pinned release URL" }
+
+  $asset = "agent-parity-config-windows-amd64.exe"
+  $configDir = Split-Path -Parent $ConfigEditor
+  New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+  $stage = Join-Path $configDir (".agent-parity-config." + [Guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Path $stage | Out-Null
+  try {
+    $checksums = Join-Path $stage "checksums.txt"
+    $binary = Join-Path $stage $asset
+    Invoke-WebRequest -UseBasicParsing -Uri ($release.TrimEnd('/') + "/checksums.txt") -OutFile $checksums
+    $line = Get-Content -LiteralPath $checksums | Where-Object { $_ -match "\s\*?$([regex]::Escape($asset))$" } | Select-Object -First 1
+    if (!$line) { throw "checksum missing for $asset" }
+    $expected = ($line -split '\s+')[0].ToLowerInvariant()
+    if ($expected -notmatch '^[0-9a-f]{64}$') { throw "invalid checksum for $asset" }
+    Invoke-WebRequest -UseBasicParsing -Uri ($release.TrimEnd('/') + "/" + $asset) -OutFile $binary
+    $actual = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) { throw "checksum mismatch for $asset" }
+    Move-Item -LiteralPath $binary -Destination $ConfigEditor -Force
+  } finally {
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+
 function Installed-Version {
   $versionFile = Path-InTarget "$ServerDir/VERSION"
   if (!(Test-Path -LiteralPath $versionFile -PathType Leaf)) { return "missing" }

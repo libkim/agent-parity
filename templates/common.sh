@@ -27,10 +27,16 @@ CURSOR_CLI=".cursor/cli.json"
 PARITY_BREAKERS=".cursorrules:Cursor"
 
 LOCAL_TEMP_FILE=""
+LOCAL_TEMP_DIR=""
 
 cleanup_local_temp() {
   [ -z "$LOCAL_TEMP_FILE" ] || rm -f "$LOCAL_TEMP_FILE"
+  if [ -n "$LOCAL_TEMP_DIR" ]; then
+    rm -f "$LOCAL_TEMP_DIR/checksums.txt" "$LOCAL_TEMP_DIR"/agent-parity-config-* 2>/dev/null || true
+    rmdir "$LOCAL_TEMP_DIR" 2>/dev/null || true
+  fi
   LOCAL_TEMP_FILE=""
+  LOCAL_TEMP_DIR=""
 }
 
 trap cleanup_local_temp EXIT
@@ -82,6 +88,68 @@ local_config_editor_path() {
   editor_version=$(tr -d '\r\n' < "$version_file")
   cache_root=${AGENT_PARITY_CACHE:-${XDG_CACHE_HOME:-${HOME:?HOME is not set}/.cache}/agent-parity}
   printf '%s\n' "$cache_root/config/$editor_version/agent-parity-config-${goos}-${goarch}"
+}
+
+hash_local_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo "agent-parity: sha256sum or shasum is required" >&2
+    return 1
+  fi
+}
+
+# Only self-heal calls this network-capable resolver. Other local management
+# commands use require_local_config_editor() and keep their existing network
+# boundaries (uninstall remains fully offline).
+ensure_local_config_editor() {
+  CONFIG_EDITOR=$(local_config_editor_path) || {
+    echo "cannot resolve local config editor path" >&2
+    return 1
+  }
+  [ -x "$CONFIG_EDITOR" ] && return 0
+  if [ -n "${AGENT_PARITY_CONFIG_EDITOR:-}" ]; then
+    echo "missing local config editor: $CONFIG_EDITOR" >&2
+    return 1
+  fi
+
+  version_file="$TARGET/$SERVER_DIR/VERSION"
+  release_file="$TARGET/$SERVER_DIR/RELEASE"
+  [ -f "$version_file" ] || { echo "missing pinned version: $version_file" >&2; return 1; }
+  [ -f "$release_file" ] || { echo "missing pinned release URL: $release_file" >&2; return 1; }
+  editor_version=$(tr -d '\r\n' < "$version_file")
+  editor_release=$(tr -d '\r\n' < "$release_file")
+  case "$editor_version" in
+    v[0-9A-Za-z._-]* | dev) ;;
+    *) echo "invalid agent-parity release version: $editor_version" >&2; return 1 ;;
+  esac
+  case "$editor_version" in
+    *[!0-9A-Za-z._-]*) echo "invalid agent-parity release version: $editor_version" >&2; return 1 ;;
+  esac
+  [ -n "$editor_release" ] || { echo "empty pinned release URL" >&2; return 1; }
+
+  asset="agent-parity-config-${goos}-${goarch}"
+  editor_dir=$(dirname "$CONFIG_EDITOR")
+  mkdir -p "$editor_dir"
+  LOCAL_TEMP_DIR=$(mktemp -d "$editor_dir/.agent-parity-config.XXXXXX")
+  curl -fsSL "${editor_release%/}/checksums.txt" -o "$LOCAL_TEMP_DIR/checksums.txt"
+  expected=$(awk -v asset="$asset" '{ name=$2; sub(/^\*/, "", name); if (name == asset) { print $1; exit } }' "$LOCAL_TEMP_DIR/checksums.txt")
+  case "$expected" in
+    *[!0-9A-Fa-f]* | "") echo "checksum missing for $asset" >&2; return 1 ;;
+  esac
+  [ "${#expected}" -eq 64 ] || { echo "checksum missing for $asset" >&2; return 1; }
+  curl -fsSL "${editor_release%/}/$asset" -o "$LOCAL_TEMP_DIR/$asset"
+  actual=$(hash_local_file "$LOCAL_TEMP_DIR/$asset") || return 1
+  expected_lc=$(printf '%s' "$expected" | tr 'A-F' 'a-f')
+  actual_lc=$(printf '%s' "$actual" | tr 'A-F' 'a-f')
+  [ "$actual_lc" = "$expected_lc" ] || { echo "checksum mismatch for $asset" >&2; return 1; }
+  chmod +x "$LOCAL_TEMP_DIR/$asset"
+  mv -f "$LOCAL_TEMP_DIR/$asset" "$CONFIG_EDITOR"
+  rm -f "$LOCAL_TEMP_DIR/checksums.txt"
+  rmdir "$LOCAL_TEMP_DIR"
+  LOCAL_TEMP_DIR=""
 }
 
 # Calls "$1 <path relative to target> <template in repo> <registered-marker>"
