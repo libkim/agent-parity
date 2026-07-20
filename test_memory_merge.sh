@@ -71,8 +71,8 @@ write_mem 5 "    - a" "2026-07-03T00:00:00Z" "shared body"
 git -C "$root" commit -qam "main recall"
 
 git -C "$root" merge -q --no-edit side
-# base 3, main +2, side +1 -> 6; a max-based merge would lose a recall.
-grep -q '^strength: 6$' "$mem"
+# base 3, main 5, side 4 -> the higher side wins.
+grep -q '^strength: 5$' "$mem"
 grep -q -- '- b' "$mem"
 grep -q '^lastAccessed: 2026-07-04' "$mem"
 grep -q '^shared body$' "$mem"

@@ -17,10 +17,9 @@ var errMemoryMergeConflict = errors.New("memory bodies changed on both sides")
 
 // mergeMemoryFiles is the git merge driver for memory markdown files: called
 // with base (%O), ours (%A), theirs (%B), it writes the merged entry to ours.
-// Reinforcement frontmatter merges without conflict — each recall is an
-// increment, so strength adds both sides' increments over base rather than
-// taking a maximum, which would drop recalls — while a body edited to
-// different content on both sides is a real conflict.
+// Reinforcement frontmatter merges without conflict — strength takes the
+// higher side and lastAccessed the newest — while a body edited to different
+// content on both sides is a real conflict left to the user.
 func mergeMemoryFiles(basePath, oursPath, theirsPath string) error {
 	baseRaw, err := os.ReadFile(basePath)
 	if err != nil {
@@ -64,12 +63,7 @@ func mergeMemoryFiles(basePath, oursPath, theirsPath string) error {
 		return errMemoryMergeConflict
 	}
 
-	if hasBase {
-		merged.Strength = base.Strength + (ours.Strength - base.Strength) + (theirs.Strength - base.Strength)
-	}
-	if max := maxInt(ours.Strength, theirs.Strength); merged.Strength < max {
-		merged.Strength = max
-	}
+	merged.Strength = maxInt(ours.Strength, theirs.Strength)
 	if merged.Strength < 1 {
 		merged.Strength = 1
 	}

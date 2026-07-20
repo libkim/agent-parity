@@ -211,8 +211,7 @@ results.
 
 Recall bumps are state worth syncing, and when two machines recall the same
 memory before syncing, a bundled git merge driver combines them instead of
-raising a conflict: both sides' recall increments add up and the newest
-`lastAccessed` wins. A memory whose text was edited differently on both sides
+raising a conflict: the higher `strength` and the newest `lastAccessed` win. A memory whose text was edited differently on both sides
 still conflicts, as it should.
 
 ### Skills

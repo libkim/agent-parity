@@ -33,7 +33,7 @@ func memoryFixture(strength int, lastAccessed, body string, tags ...string) stri
 	return b.String()
 }
 
-func TestMergeMemoryAddsBothIncrements(t *testing.T) {
+func TestMergeMemoryTakesMaxStrength(t *testing.T) {
 	dir := t.TempDir()
 	base := writeMergeFixture(t, dir, "base.md", memoryFixture(3, "2026-07-02T00:00:00Z", "shared body", "a"))
 	ours := writeMergeFixture(t, dir, "ours.md", memoryFixture(5, "2026-07-03T00:00:00Z", "shared body", "a"))
@@ -50,9 +50,9 @@ func TestMergeMemoryAddsBothIncrements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// base 3, ours +2, theirs +1 -> 6 (max would lose a recall).
-	if e.Strength != 6 {
-		t.Fatalf("strength = %d, want 6", e.Strength)
+	// base 3, ours 5, theirs 4 -> the higher side wins.
+	if e.Strength != 5 {
+		t.Fatalf("strength = %d, want 5", e.Strength)
 	}
 	if got := e.LastAccessed.UTC().Format("2006-01-02"); got != "2026-07-04" {
 		t.Fatalf("lastAccessed date = %s, want 2026-07-04", got)
