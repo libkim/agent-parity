@@ -1,0 +1,11 @@
+{
+  "agent-parity": {
+    "PreInvocation": [
+      {
+        "command": ".agents/bin/agent-parity self-heal",
+        "timeout": 30
+      }
+    ],
+    "enabled": true
+  }
+}

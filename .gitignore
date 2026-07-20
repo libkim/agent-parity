@@ -3,5 +3,7 @@
 /memory/
 /.cache/
 # agent-parity:begin
-/.claude/
+/.agents/mcp/memory/dist/
+/.claude/*
+!/.claude/settings.json
 # agent-parity:end
