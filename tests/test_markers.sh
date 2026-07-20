@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-repo=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-markers.XXXXXX")
 trap 'rm -rf "$root"' EXIT HUP INT TERM
 TARGET=$root

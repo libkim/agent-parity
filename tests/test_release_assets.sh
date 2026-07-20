@@ -2,7 +2,7 @@
 set -eu
 
 version=${1:?usage: test_release_assets.sh <version>}
-repo=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 dist="$repo/dist"
 
 expected='agent-parity-config-darwin-amd64

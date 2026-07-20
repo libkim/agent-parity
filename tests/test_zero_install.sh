@@ -2,13 +2,13 @@
 set -eu
 
 version=${1:?usage: test_zero_install.sh <version>}
-repo=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-zero-install.XXXXXX")
 trap 'rm -rf "$root"' EXIT HUP INT TERM
 
 mkdir -p "$root/.agents/scripts" "$root/.agents/mcp/memory" "$root/.cursor" "$root/.codex"
 cp "$repo/templates/common.sh" "$repo/templates/self-heal.sh" "$root/.agents/scripts/"
-cp "$repo/run.sh" "$root/.agents/mcp/memory/run.sh"
+cp "$repo/templates/run.sh" "$root/.agents/mcp/memory/run.sh"
 chmod +x "$root/.agents/mcp/memory/run.sh"
 printf '%s\n' "$version" > "$root/.agents/mcp/memory/VERSION"
 printf 'file://%s/dist\n' "$repo" > "$root/.agents/mcp/memory/RELEASE"

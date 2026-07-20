@@ -5,7 +5,7 @@
 set -eu
 
 version=${1:-v9.8.7}
-repo=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 ext=""
 case "$(uname -s)" in

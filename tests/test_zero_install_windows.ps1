@@ -4,7 +4,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$testRepoRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path
+$testRepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $dist = Join-Path $testRepoRoot "dist"
 $asset = Join-Path $dist "agent-parity-config-windows-amd64.exe"
 if (!(Test-Path -LiteralPath $asset -PathType Leaf)) { throw "build release assets first" }
@@ -24,7 +24,7 @@ try {
 
   New-Item -ItemType Directory -Force -Path "$root\.agents\scripts", "$root\.agents\mcp\memory", "$root\.cursor", "$root\.codex" | Out-Null
   Copy-Item -LiteralPath (Join-Path $testRepoRoot "templates\common.ps1"),(Join-Path $testRepoRoot "templates\self-heal.ps1") -Destination "$root\.agents\scripts"
-  Copy-Item -LiteralPath (Join-Path $testRepoRoot "run.cmd") -Destination "$root\.agents\mcp\memory"
+  Copy-Item -LiteralPath (Join-Path $testRepoRoot "templates\run.cmd") -Destination "$root\.agents\mcp\memory"
   [IO.File]::WriteAllText("$root\.agents\mcp\memory\VERSION", "$Version`n")
   [IO.File]::WriteAllText("$root\.agents\mcp\memory\RELEASE", "$base/dist`n")
   $json = '{"mcpServers":{"memory":{"command":".agents/mcp/memory/run.sh"}}}'

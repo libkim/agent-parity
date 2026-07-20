@@ -4,7 +4,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$testRepoRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path
+$testRepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $dist = Join-Path $testRepoRoot "dist"
 if (!(Test-Path -LiteralPath (Join-Path $dist "agent-parity-config-windows-amd64.exe") -PathType Leaf)) {
   throw "build release assets first"

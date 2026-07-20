@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$repo = (Resolve-Path -LiteralPath $PSScriptRoot).Path
+$repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $testRoot = Join-Path $tempBase ("agent-parity-atomic-write-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $testRoot | Out-Null

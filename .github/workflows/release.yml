@@ -20,13 +20,13 @@ jobs:
       - run: bash build.sh
         env:
           VERSION: ${{ github.ref_name }}
-      - run: sh test_release_assets.sh "${{ github.ref_name }}"
-      - run: sh test_markers.sh
-      - run: sh test_uninstall.sh
-      - run: sh test_install_markers.sh
-      - run: sh test_readme_install.sh "${{ github.ref_name }}"
-      - run: sh test_zero_install.sh "${{ github.ref_name }}"
-      - run: sh test_memory_merge.sh "${{ github.ref_name }}"
+      - run: sh tests/test_release_assets.sh "${{ github.ref_name }}"
+      - run: sh tests/test_markers.sh
+      - run: sh tests/test_uninstall.sh
+      - run: sh tests/test_install_markers.sh
+      - run: sh tests/test_readme_install.sh "${{ github.ref_name }}"
+      - run: sh tests/test_zero_install.sh "${{ github.ref_name }}"
+      - run: sh tests/test_memory_merge.sh "${{ github.ref_name }}"
 
   test-windows:
     runs-on: windows-latest
@@ -41,21 +41,21 @@ jobs:
           go test -tags configeditor ./...
           VERSION="${{ github.ref_name }}" bash build.sh
       - shell: powershell
-        run: .\test_powershell_syntax.ps1
+        run: .\tests\test_powershell_syntax.ps1
       - shell: powershell
-        run: .\test_atomic_write.ps1
+        run: .\tests\test_atomic_write.ps1
       - shell: powershell
-        run: .\test_markers.ps1
+        run: .\tests\test_markers.ps1
       - shell: powershell
-        run: .\test_claude_wrapper.ps1
+        run: .\tests\test_claude_wrapper.ps1
       - shell: powershell
-        run: .\test_install_windows.ps1 "${{ github.ref_name }}"
+        run: .\tests\test_install_windows.ps1 "${{ github.ref_name }}"
       - shell: powershell
-        run: .\test_zero_install_windows.ps1 "${{ github.ref_name }}"
+        run: .\tests\test_zero_install_windows.ps1 "${{ github.ref_name }}"
       - shell: bash
-        run: sh test_git_bash.sh
+        run: sh tests/test_git_bash.sh
       - shell: bash
-        run: sh test_memory_merge.sh "${{ github.ref_name }}"
+        run: sh tests/test_memory_merge.sh "${{ github.ref_name }}"
 
   release:
     needs: [test-linux, test-windows]
@@ -68,7 +68,7 @@ jobs:
       - run: bash build.sh
         env:
           VERSION: ${{ github.ref_name }}
-      - run: sh test_release_assets.sh "${{ github.ref_name }}"
+      - run: sh tests/test_release_assets.sh "${{ github.ref_name }}"
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*

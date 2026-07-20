@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-repo=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 [ -x "$repo/dist/agent-parity-config-linux-amd64" ] || { echo "build release assets first" >&2; exit 1; }
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-install-markers.XXXXXX")
 trap 'rm -rf "$root"' EXIT HUP INT TERM

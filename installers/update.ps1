@@ -235,8 +235,8 @@ function Install-Server {
   $stage = Join-Path $dest (".agent-parity-runtime." + [Guid]::NewGuid().ToString("N"))
   New-Item -ItemType Directory -Path $stage | Out-Null
   try {
-    Download-File "$Raw/run.sh" (Join-Path $stage "run.sh")
-    Download-File "$Raw/run.cmd" (Join-Path $stage "run.cmd")
+    Download-File "$Raw/templates/run.sh" (Join-Path $stage "run.sh")
+    Download-File "$Raw/templates/run.cmd" (Join-Path $stage "run.cmd")
     Write-Text (Join-Path $stage "VERSION") ($Version + "`n")
     Write-Text (Join-Path $stage "RELEASE") ($Release.TrimEnd('/') + "`n")
     foreach ($name in @("run.sh", "run.cmd", "VERSION", "RELEASE")) {

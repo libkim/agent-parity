@@ -38,10 +38,10 @@ done
 
 # Installers and updaters are release assets. Bake the tag into each copy so
 # the downloaded bootstrap and every file it installs use one release.
-sed "s/^PACKAGED_VERSION=\"dev\"$/PACKAGED_VERSION=\"$VERSION\"/" install.sh > "$OUT/install.sh"
-sed "s/^\\\$PackagedVersion = \"dev\"$/\\\$PackagedVersion = \"$VERSION\"/" install.ps1 > "$OUT/install.ps1"
-sed "s/^PACKAGED_VERSION=\"dev\"$/PACKAGED_VERSION=\"$VERSION\"/" update.sh > "$OUT/update.sh"
-sed "s/^\\\$PackagedVersion = \"dev\"$/\\\$PackagedVersion = \"$VERSION\"/" update.ps1 > "$OUT/update.ps1"
+sed "s/^PACKAGED_VERSION=\"dev\"$/PACKAGED_VERSION=\"$VERSION\"/" installers/install.sh > "$OUT/install.sh"
+sed "s/^\\\$PackagedVersion = \"dev\"$/\\\$PackagedVersion = \"$VERSION\"/" installers/install.ps1 > "$OUT/install.ps1"
+sed "s/^PACKAGED_VERSION=\"dev\"$/PACKAGED_VERSION=\"$VERSION\"/" installers/update.sh > "$OUT/update.sh"
+sed "s/^\\\$PackagedVersion = \"dev\"$/\\\$PackagedVersion = \"$VERSION\"/" installers/update.ps1 > "$OUT/update.ps1"
 grep -q "^PACKAGED_VERSION=\"$VERSION\"$" "$OUT/install.sh"
 grep -q "^\\\$PackagedVersion = \"$VERSION\"$" "$OUT/install.ps1"
 grep -q "^PACKAGED_VERSION=\"$VERSION\"$" "$OUT/update.sh"

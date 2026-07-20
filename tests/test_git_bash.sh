@@ -6,7 +6,7 @@ case "$(uname -s)" in
   *) echo "test_git_bash.sh must run in Git Bash on Windows" >&2; exit 2 ;;
 esac
 
-repo=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-git-bash.XXXXXX")
 trap 'rm -rf "$root"' EXIT HUP INT TERM
 mkdir -p "$root/.agents/bin"

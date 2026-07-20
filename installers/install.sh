@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# agent-parity: Unix updater.
+# agent-parity: Unix installer.
 set -eu
 
 REPO="libkim/agent-parity"
@@ -158,7 +158,7 @@ gc_version_cache() {
 # The latest asset URL is resolved before this script starts, so this script
 # never performs a second latest-release lookup.
 if [ -z "$VERSION" ]; then
-  [ "$PACKAGED_VERSION" != dev ] || { echo "unpackaged update.sh requires AGENT_PARITY_VERSION" >&2; exit 1; }
+  [ "$PACKAGED_VERSION" != dev ] || { echo "unpackaged install.sh requires AGENT_PARITY_VERSION" >&2; exit 1; }
   VERSION=$PACKAGED_VERSION
 fi
 case "$VERSION" in
@@ -215,13 +215,13 @@ install_server() {
   dest="$TARGET/$SERVER_DIR"
   mkdir -p "$dest"
   TEMP_DIR=$(mktemp -d "$dest/.agent-parity-runtime.XXXXXX")
-  fetch_to run.sh "$TEMP_DIR/run.sh" executable
+  fetch_to templates/run.sh "$TEMP_DIR/run.sh" executable
   TEMP_FILE=$(make_temp_for "$TEMP_DIR/run.cmd")
-  if fetch run.cmd > "$TEMP_FILE" 2>/dev/null; then
+  if fetch templates/run.cmd > "$TEMP_FILE" 2>/dev/null; then
     commit_temp "$TEMP_DIR/run.cmd"
   else
     cleanup_temp
-    echo "could not fetch run.cmd" >&2
+    echo "could not fetch templates/run.cmd" >&2
     exit 1
   fi
   write_value_to "$TEMP_DIR/VERSION" "$VERSION"
@@ -534,12 +534,12 @@ sync_agents_block() {
 
 
 usage() {
-  echo "usage: update.sh [update] [dir]" >&2
+  echo "usage: install.sh [install] [dir]" >&2
   exit 2
 }
 
 TARGET=""
-if [ "${1:-}" = "update" ]; then shift; fi
+if [ "${1:-}" = "install" ]; then shift; fi
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h | --help | help) usage ;;
@@ -552,12 +552,19 @@ TARGET=${TARGET:-.}
 [ -d "$TARGET" ] || { echo "no such directory: $TARGET" >&2; exit 1; }
 platform
 
-cmd_update() {
-  if [ ! -d "$TARGET/$SERVER_DIR" ]; then
-    echo "nothing to update: $TARGET/$SERVER_DIR not found -- run install first" >&2
-    exit 1
-  fi
-  old=$(installed_version)
+warn_parity() {
+  for pair in $PARITY_BREAKERS; do
+    f="${pair%%:*}"
+    who=$(echo "${pair##*:}" | tr '_' ' ')
+    if [ -e "$TARGET/$f" ]; then
+      echo "parity: $f exists -- only $who reads it, so agents diverge; fold it into AGENTS.md"
+    fi
+  done
+}
+
+
+cmd_install() {
+  mkdir -p "$TARGET/$SERVER_DIR" "$TARGET/$STORE_DIR"
   install_server
   install_project_cli
   install_config_editor
@@ -575,13 +582,12 @@ cmd_update() {
   # legacy disappears.
   remove_tombstones
   gc_version_cache
-  new=$(installed_version)
-  if [ "$old" = "$new" ]; then
-    echo "already up to date: $new"
-  else
-    echo "updated: $old -> $new"
-  fi
+  warn_parity
+  echo
+  echo "installed $(installed_version) -> $TARGET/$SERVER_DIR"
+  echo "memory store: $TARGET/$STORE_DIR"
+  echo "start a new agent session (or restart) to load the memory server."
 }
 
 
-cmd_update
+cmd_install
