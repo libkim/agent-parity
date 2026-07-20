@@ -12,8 +12,6 @@ SCRIPT_DIR=$here
 TARGET=$target
 . "$here/common.sh"
 platform
-ensure_local_config_editor
-editor=$CONFIG_EDITOR
 
 ensure_config() {
   rel=$1
@@ -24,14 +22,32 @@ ensure_config() {
   [ "$result" != changed ] || changed=$((changed + 1))
 }
 
-ensure_config ".mcp.json"
-ensure_config ".cursor/mcp.json"
-ensure_config ".codex/config.toml"
-ensure_config ".agents/mcp_config.json"
+# Every failure below becomes a notice instead of a nonzero exit: this runs as
+# a session-start hook and Antigravity can crash the turn on nonzero, and a
+# hook that dies mid-script reports nothing -- exactly the silent outage this
+# script exists to prevent.
+if ensure_local_config_editor 2>/dev/null; then
+  editor=$CONFIG_EDITOR
+  ensure_config ".mcp.json"
+  ensure_config ".cursor/mcp.json"
+  ensure_config ".codex/config.toml"
+  ensure_config ".agents/mcp_config.json"
+else
+  failed=$((failed + 1))
+fi
 
-[ "$changed" -gt 0 ] || [ "$failed" -gt 0 ] || exit 0
+# Fill the binary cache ahead of the real MCP launch so a pruned or fresh
+# cache never turns into a silent memory outage.
+warm=ok
+"$target/.agents/mcp/memory/run.sh" prewarm >/dev/null 2>&1 || warm=failed
+
+[ "$changed" -gt 0 ] || [ "$failed" -gt 0 ] || [ "$warm" = failed ] || exit 0
 if [ "$failed" -gt 0 ]; then
   printf '%s\n' "agent-parity could not repair every MCP configuration. Run agent-parity status for details."
-else
+elif [ "$changed" -gt 0 ]; then
   printf '%s\n' "agent-parity updated $changed MCP configuration(s) for this OS. Restart this agent session to load the memory tools."
 fi
+if [ "$warm" = failed ]; then
+  printf '%s\n' "agent-parity could not prepare the memory server binary, so the memory tools may be offline this session. Check the network and restart this agent session."
+fi
+exit 0

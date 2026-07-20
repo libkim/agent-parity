@@ -82,5 +82,9 @@ fi
 
 # The store lives at <root>/.agents/memory ($MEMORY_DIR overrides). The
 # launcher lives at <root>/.agents/mcp/memory, so the root is three levels up.
+# Session-start hooks call "run.sh prewarm" to fill the cache ahead of the
+# real MCP launch; stop before starting the server.
+[[ "${1:-}" != prewarm ]] || exit 0
+
 mem="${MEMORY_DIR:-"$(cd "$here/../../.." && pwd)/.agents/memory"}"
 exec "$bin" -dir "$mem" "$@"
