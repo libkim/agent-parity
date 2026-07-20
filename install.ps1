@@ -40,6 +40,13 @@ $MarkEnd = "<!-- agent-parity:end -->"
 $GitIgnoreBegin = "# agent-parity:begin"
 $GitIgnoreEnd = "# agent-parity:end"
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", "AGENTS.md", "CLAUDE.md")
+# Manifest diff: everything older supported releases created that the current
+# release no longer manages -- the union of their manifests minus the current
+# one. install/update remove these after converging; drop an entry only when
+# the support floor rises past the release that retired it.
+#   retired in v0.6.0: vendored binaries, replaced by the per-version cache
+#   retired in v0.6.0: the PowerShell CLI entry, folded into agent-parity.cmd
+$Tombstones = @(".agents/mcp/memory/dist", ".agents/bin/agent-parity.ps1")
 $ParityBreakers = @(
   @{ File = ".cursorrules"; Who = "Cursor" }
 )
@@ -123,7 +130,6 @@ function Install-ProjectCli {
   foreach ($name in @("common.sh", "status.sh", "version.sh", "uninstall.sh", "sync-claude.sh", "self-heal.sh")) {
     Write-Text (Join-Path $s $name) ((Fetch-Text "templates/$name").TrimEnd("`r", "`n") + "`n")
   }
-  Remove-Item -LiteralPath (Join-Path $d "agent-parity.ps1") -Force -ErrorAction SilentlyContinue
   Write-Text (Join-Path $d "agent-parity.cmd") ((Fetch-Text "templates/project-agent-parity.cmd").TrimEnd("`r", "`n") + "`r`n")
   Write-Text (Join-Path $d "agent-parity") ((Fetch-Text "templates/project-agent-parity.sh").TrimEnd("`r", "`n") + "`n")
   Write-Output "cli: wrote project launchers and local command scripts"
@@ -177,6 +183,16 @@ function Installed-Version {
   return (Read-Text $versionFile).Trim()
 }
 
+function Remove-Tombstones {
+  foreach ($tombstone in $Tombstones) {
+    $full = Path-InTarget $tombstone
+    if (Test-Path -LiteralPath $full) {
+      Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue
+      Write-Output "legacy: removed $tombstone"
+    }
+  }
+}
+
 # Release assets have PackagedVersion replaced with their tag by build.sh. The
 # latest asset URL is resolved before this script starts, so there is no second
 # latest-release lookup here.
@@ -205,9 +221,6 @@ function Install-Server {
   } finally {
     Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
   }
-  # Remove a legacy vendored copy only after the pinned launchers and release
-  # metadata are ready. The shared MCP binary is downloaded on first launch.
-  Remove-Item -LiteralPath (Join-Path $dest "dist") -Recurse -Force -ErrorAction SilentlyContinue
   Write-Output "server: pinned $Version (current platform binary downloads on first MCP launch)"
 }
 
@@ -490,6 +503,9 @@ function Cmd-Install {
   Reg-AgentHooks
   Sync-AgentsBlock
   Sync-GitIgnore
+  # Tombstones go last so the converged layout is complete before anything
+  # legacy disappears.
+  Remove-Tombstones
   Warn-Parity
   Write-Output ""
   Write-Output "installed $(Installed-Version) -> $(Path-InTarget $ServerDir)"

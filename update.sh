@@ -24,6 +24,13 @@ GI_END="# agent-parity:end"
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.
 ARTIFACTS=".mcp.json .cursor .codex .agents AGENTS.md CLAUDE.md"
+# Manifest diff: everything older supported releases created that the current
+# release no longer manages -- the union of their manifests minus the current
+# one. install/update remove these after converging; drop an entry only when
+# the support floor rises past the release that retired it.
+#   retired in v0.6.0: vendored binaries, replaced by the per-version cache
+#   retired in v0.6.0: the PowerShell CLI entry, folded into agent-parity.cmd
+TOMBSTONES=".agents/mcp/memory/dist .agents/bin/agent-parity.ps1"
 # Cursor CLI reads .cursor/cli.json for tool permissions. It is wired on its
 # own, outside the MCP config list.
 CURSOR_CLI=".cursor/cli.json"
@@ -117,6 +124,14 @@ installed_version() {
   tr -d '\r\n' < "$version_file"
 }
 
+remove_tombstones() {
+  for tombstone in $TOMBSTONES; do
+    [ -e "$TARGET/$tombstone" ] || continue
+    rm -rf "$TARGET/$tombstone"
+    echo "legacy: removed $tombstone"
+  done
+}
+
 # Release assets have PACKAGED_VERSION replaced with their tag by build.sh.
 # The latest asset URL is resolved before this script starts, so this script
 # never performs a second latest-release lookup.
@@ -147,7 +162,6 @@ install_project_cli() {
   for name in common.ps1 status.ps1 version.ps1 uninstall.ps1 sync-claude.ps1 self-heal.ps1; do
     fetch_to "templates/$name" "$s/$name"
   done
-  rm -f "$d/agent-parity.ps1"
   echo "cli: wrote project launchers and local command scripts"
 }
 
@@ -195,9 +209,6 @@ install_server() {
   done
   rmdir "$TEMP_DIR"
   TEMP_DIR=""
-  # Remove a legacy vendored copy only after the pinned launchers and release
-  # metadata are ready. The shared MCP binary is downloaded on first launch.
-  rm -rf "$dest/dist"
   echo "server: pinned $VERSION (current platform binary downloads on first MCP launch)"
 }
 
@@ -495,6 +506,9 @@ cmd_update() {
   reg_agent_hooks
   sync_agents_block
   sync_gitignore
+  # Tombstones go last so the converged layout is complete before anything
+  # legacy disappears.
+  remove_tombstones
   new=$(installed_version)
   if [ "$old" = "$new" ]; then
     echo "already up to date: $new"
