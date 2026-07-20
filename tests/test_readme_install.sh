@@ -3,6 +3,8 @@ set -eu
 
 version=${1:?usage: test_readme_install.sh <version>}
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/lib.sh"
+tests_platform
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-readme-install.XXXXXX")
 trap 'rm -rf "$root"' EXIT HUP INT TERM
 
@@ -19,6 +21,8 @@ trap 'rm -rf "$root"' EXIT HUP INT TERM
 [ -x "$root/.agents/scripts/status.sh" ]
 [ -f "$root/.mcp.json" ]
 [ -f "$root/.cursor/cli.json" ]
-[ ! -e "$root/cache/memory/$version/memory-mcp-linux-amd64" ]
+# install must not pre-download the server binary; that happens at first
+# MCP launch or the session-start pre-warm.
+[ ! -e "$root/cache/memory-mcp/$version/$server_asset" ]
 
 echo "README-style Unix install pipeline: OK"

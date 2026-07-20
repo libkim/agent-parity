@@ -2,7 +2,9 @@
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-config_editor=${AGENT_PARITY_CONFIG_EDITOR:-"$repo/dist/agent-parity-config-linux-amd64"}
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/lib.sh"
+tests_platform
+config_editor=${AGENT_PARITY_CONFIG_EDITOR:-"$repo/dist/$editor_asset"}
 [ -x "$config_editor" ] || { echo "build the Linux config editor first: $config_editor" >&2; exit 1; }
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-uninstall-test.XXXXXX")
 trap 'rm -rf "$root"' EXIT HUP INT TERM

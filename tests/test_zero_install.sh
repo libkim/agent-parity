@@ -22,12 +22,14 @@ cat > "$root/.codex/config.toml" <<'EOF'
 command = ".agents/mcp/memory/run.cmd"
 EOF
 
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/lib.sh"
+tests_platform
 cache="$root/empty-cache"
 output=$(AGENT_PARITY_CACHE="$cache" sh "$root/.agents/scripts/self-heal.sh")
 printf '%s\n' "$output" | grep -qF 'Restart this agent session'
-editor="$cache/config/$version/agent-parity-config-linux-amd64"
+editor="$cache/config/$version/$editor_asset"
 [ -x "$editor" ]
-[ -x "$cache/memory-mcp/$version/memory-mcp-linux-amd64" ]
+[ -x "$cache/memory-mcp/$version/$server_asset" ]
 
 for config in .mcp.json .cursor/mcp.json .codex/config.toml .agents/mcp_config.json; do
   [ "$("$editor" command "$root/$config")" = ".agents/mcp/memory/run.sh" ]

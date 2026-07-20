@@ -34,7 +34,9 @@ for t in $TARGETS; do
 done
 
 # The launchers verify every downloaded release binary before caching it.
-(cd "$OUT" && sha256sum memory-mcp-* agent-parity-config-* | LC_ALL=C sort -k2 > checksums.txt)
+# macOS ships shasum instead of sha256sum; both emit the same format.
+if command -v sha256sum >/dev/null 2>&1; then hash_cmd="sha256sum"; else hash_cmd="shasum -a 256"; fi
+(cd "$OUT" && $hash_cmd memory-mcp-* agent-parity-config-* | LC_ALL=C sort -k2 > checksums.txt)
 
 # Installers and updaters are release assets. Bake the tag into each copy so
 # the downloaded bootstrap and every file it installs use one release.

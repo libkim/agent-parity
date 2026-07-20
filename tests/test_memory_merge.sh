@@ -7,19 +7,8 @@ set -eu
 version=${1:-v9.8.7}
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
-ext=""
-case "$(uname -s)" in
-  Linux) goos=linux ;;
-  Darwin) goos=darwin ;;
-  MINGW* | MSYS* | CYGWIN*) goos=windows; ext=".exe" ;;
-  *) echo "unsupported OS: $(uname -s)" >&2; exit 1 ;;
-esac
-case "$(uname -m)" in
-  x86_64 | amd64) goarch=amd64 ;;
-  aarch64 | arm64) goarch=arm64 ;;
-  *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
-esac
-editor_asset="agent-parity-config-${goos}-${goarch}${ext}"
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/lib.sh"
+tests_platform
 [ -x "$repo/dist/$editor_asset" ] || { echo "build release assets first: dist/$editor_asset" >&2; exit 1; }
 
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-merge.XXXXXX")
