@@ -10,7 +10,7 @@
 <p align="center"><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
 
 Every coding agent keeps its own memory, skills, and instruction files, so
-switching agents — or sharing a repo with teammates — means each one behaves
+switching agents, or sharing a repo with teammates, means each one behaves
 differently and has to be set up again. agent-parity fixes that by making the shared environment (memory, skills,
 instructions) **environment as code** committed to the repo: install once
 and Claude Code, Codex, Cursor, and Antigravity share the same memory and read
@@ -18,13 +18,13 @@ the same skills and instructions (`AGENTS.md`).
 
 ## Features
 
-- **Dependency-free** — uses two static native executables: `memory-mcp` serves
+- **Dependency-free**: uses two static native executables: `memory-mcp` serves
   memory, while `agent-parity-config` safely edits JSON/TOML; no Go, Node, or
   Python runtime is required.
-- **Non-invasive** — changes project settings only and never
+- **Non-invasive**: changes project settings only and never
   edits global agent settings. Release executables live in a per-user cache
   shared across projects.
-- **Zero-install** — commit the installed wiring once and a fresh machine needs
+- **Zero-install**: commit the installed wiring once and a fresh machine needs
   no install or update command. The first agent session automatically downloads
   and verifies the current platform executables; after a cross-OS repair, only
   an agent-session restart is needed.
@@ -53,13 +53,13 @@ session.
 
 ### Install
 
-Linux/macOS/WSL:
+POSIX sh (Linux/macOS):
 
 ```sh
 curl -fsSL https://github.com/libkim/agent-parity/releases/latest/download/install.sh | sh
 ```
 
-Native Windows PowerShell:
+PowerShell (Windows):
 
 ```powershell
 irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 | iex
@@ -75,7 +75,7 @@ below.
 - A config that already lists other MCP servers gets agent-parity's
   memory-server entry added and the rest preserved. If a `memory` entry already
   exists but points at a different server, it is reported with a replacement
-  snippet instead of overwritten — that entry is yours to swap.
+  snippet instead of overwritten. That entry is yours to swap.
 - Any agent skills already in the project (`.claude`, `.codex`, or `.cursor`
   `skills/`) are moved into the shared `.agents/skills/` automatically, so you
   don't have to do anything.
@@ -95,14 +95,14 @@ The `memory` MCP lets multiple agents use one memory the same way. Items marked 
 
 ### Commands
 
-agent-parity exposes these as an `agent-parity` skill, so each agent can run
+agent-parity exposes these management commands as an `agent-parity` skill, so each agent can run
 them through its own skill interface.
 
 | Command | Description |
 | --- | --- |
 | `status` | Checks the project files and the locally available agent CLIs. |
 | `version` | Reports the installed and latest version. |
-| `update` | Re-applies everything at the latest release — pinned runtime metadata, launchers, registrations, skills wiring, Claude settings, and marker blocks. |
+| `update` | Re-applies everything at the latest release: pinned runtime metadata, launchers, registrations, skills wiring, Claude settings, and marker blocks. |
 | `uninstall` | Removes project wiring while leaving the shared executable cache and, by default, the memory store. Add `--purge` to delete the memory store as well. |
 
 | Where | Automatic skill invocation | Manual skill invocation |
@@ -111,8 +111,8 @@ them through its own skill interface.
 | Codex CLI | "update agent-parity" | `$agent-parity update` |
 | Cursor Agent | "update agent-parity" | `/agent-parity` and pick it |
 | Antigravity CLI | "update agent-parity" | — |
-| Shell — Linux/macOS/WSL | — | `./.agents/bin/agent-parity update` |
-| Shell — Native Windows PowerShell | — | `.\.agents\bin\agent-parity.cmd update` |
+| POSIX sh (Linux/macOS) | — | `./.agents/bin/agent-parity update` |
+| PowerShell (Windows) | — | `.\.agents\bin\agent-parity.cmd update` |
 
 <details>
 <summary><code>status</code> output</summary>
@@ -174,12 +174,12 @@ cache alone. Claude artifacts are generated from `.agents/`: `.claude/skills/`
 is ignored, while the generated `.claude/settings.json` is committed so a
 fresh pull already contains the hooks needed to regenerate it. If the project's
 `.gitignore` would hide the tracked wiring, `install` maintains a marker block
-and `uninstall` reverts it. Git is optional — it only matters for sharing across
+and `uninstall` reverts it. Git is optional. It only matters for sharing across
 machines or teammates.
 
 agent-parity handles your content and its own wiring differently. In the agent
 configs and Claude settings it merges only its own entries, so your other
-settings there — and a `memory` entry you repoint at another server — are
+settings there (and a `memory` entry you repoint at another server) are
 preserved. The marker blocks in `AGENTS.md` and `.gitignore` and the generated
 shims (launchers, command scripts, sync scripts, and the `agent-parity`
 skill) are regenerated by `update` to stay current, so don't edit those copies;
@@ -188,8 +188,8 @@ skill) are regenerated by `update` to stay current, so don't edit those copies;
 request). Skills already
 sitting in a per-agent folder (`.claude`, `.codex`, or `.cursor` `skills/`) are
 moved into the shared `.agents/skills/` at install so every agent shares them;
-after `uninstall`, a `.claude/skills` copy is left so Claude — which can't read
-the shared folder — keeps its skills without the sync.
+after `uninstall`, a `.claude/skills` copy is left so Claude (which can't read
+the shared folder) keeps its skills without the sync.
 
 ### Cross-OS self-heal
 
@@ -224,7 +224,7 @@ Drop standard Agent Skills (`<name>/SKILL.md`) into `.agents/skills/`. Codex,
 Cursor, and Antigravity CLI load them from there directly. For Claude Code, the
 installed SessionStart hook calls `.agents/bin/agent-parity sync-claude`; the
 project-local launcher selects `sync-claude.sh` on Unix or `sync-claude.ps1` on
-native Windows. That recreates `.claude/skills` and `.claude/settings.json`
+Windows. That recreates `.claude/skills` and `.claude/settings.json`
 from the `.agents/` source at the start of every session. A separate Claude
 SessionStart hook runs MCP self-heal independently. Edit only the source;
 the generated copy is disposable.
@@ -236,7 +236,7 @@ local.
 | Path | Contents |
 | --- | --- |
 | `.agents/mcp/memory/` | memory server launchers plus pinned `VERSION` and `RELEASE` metadata; no binaries |
-| `.agents/memory/` | the memory store — one markdown file per memory |
+| `.agents/memory/` | the memory store: one markdown file per memory |
 | `.agents/skills/` | shared skills source (yours to fill) |
 | `.agents/skills/agent-parity/` | managed skill for running the management commands from any agent |
 | `.agents/bin/` | project-local launchers (`agent-parity`, `agent-parity.cmd`) |
@@ -267,7 +267,7 @@ version-stamped `update.sh` / `update.ps1` asset. That embedded version selects
 the matching Raw templates and config-editor asset; it also pins the MCP
 launcher metadata to that release. No updater is kept in `.agents/scripts`.
 
-`uninstall` is fully offline and never starts the MCP launcher. Native Windows
+`uninstall` is fully offline and never starts the MCP launcher. Windows
 and Unix both use the verified `agent-parity-config` editor installed in the
 shared cache for structured JSON/TOML changes. Neither path needs Python or
 another user-installed runtime.
