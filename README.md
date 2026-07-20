@@ -123,9 +123,9 @@ whether that session currently exposes the memory tools.
 | Output | Value | Meaning |
 | --- | --- | --- |
 | `target` | `<path>` | Project directory being inspected. |
-| `server` | `dev` | Development runtime metadata is installed. |
-|  | `vX.Y.Z` | The project is pinned to this release; its version can be compared with the latest release. |
-|  | `missing` | The pinned `VERSION` or `RELEASE` metadata is missing. |
+| `server` | `vX.Y.Z (shared cache, downloaded on demand)` | Pinned release version. The platform binary is not vendored in the repo; the launcher fetches it into the shared cache on first use. Comparable with the latest release. |
+|  | `dev (shared cache, downloaded on demand)` | Dev metadata is pinned instead of a release. |
+|  | `missing` | The pinned `VERSION` or `RELEASE` metadata is absent. |
 | `launcher` | `ok` | The OS-appropriate launcher exists. |
 |  | `missing` | The launcher is absent; agents cannot resolve the cached runtime. |
 | `latest release` | `vX.Y.Z` | GitHub's latest release was found. |
@@ -136,15 +136,19 @@ whether that session currently exposes the memory tools.
 |  | `points elsewhere` | A `memory` MCP entry exists, but it points to another launcher; it is deliberately not overwritten. |
 |  | `config missing` | The agent config file is absent. |
 |  | `not registered` | The config file exists but has no usable entry for this install. |
+| `claude wrapper` | `registered (CLAUDE.md)` / `missing` / `not registered` | Whether `CLAUDE.md` is the `@AGENTS.md` import wrapper; a pre-existing non-wrapper `CLAUDE.md` is preserved. |
 | `agent-specific diagnostics` | CLI found / not found, registration result | Extra checks offered by the installed agent CLI. These are not a check of the current agent session's tool visibility. |
 | `self-heal hooks` | `registered` / `missing` | Whether the managed hooks can retarget the memory launcher. Claude and Codex use `SessionStart`, Cursor uses `sessionStart`, and Antigravity uses `PreInvocation`. Codex requires the project hook to be reviewed and trusted. |
 | `skills` | `<n> in .agents/skills; sync script present` | Shared skill source and Claude sync script are installed. |
 |  | `sync wiring missing` | The Claude skill-sync script is absent. |
+|  | `management skill: present` / `missing` | Whether the managed `agent-parity` skill is installed. |
 | `hook` | `registered` / `missing` | Whether Claude's session-start hook will sync skills into `.claude/skills`. |
+| `cursor cli` | `memory allowlist present` / `allowlist missing` | Whether `.cursor/cli.json` grants Cursor auto-approval for the memory tools. |
 | `AGENTS.md` | `memory block present` / `missing` | Whether the managed memory instruction block is present. |
 | `memory store` | `<n> entries` / `missing` | Number of saved memory Markdown files, or that the store directory does not exist. |
 | `git` | `all artifacts tracked` | Installed artifacts are eligible to sync through Git. |
 |  | `IGNORED ...` | One or more installed artifacts are ignored and will not sync until `install` or `update` repairs the managed `.gitignore` block. |
+|  | `memory merge driver: registered` / `missing` | Whether the git merge driver for `.agents/memory` files is registered in `.git/config`. |
 | `parity` | `<file> exists ...` | An agent-specific instruction file would make agent behavior diverge; merge its content into `AGENTS.md`. |
 
 </details>
@@ -271,7 +275,3 @@ launcher metadata to that release. No updater is kept in `.agents/scripts`.
 and Unix both use the verified `agent-parity-config` editor installed in the
 shared cache for structured JSON/TOML changes. Neither path needs Python or
 another user-installed runtime.
-
-## License
-
-MIT
