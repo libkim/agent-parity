@@ -80,7 +80,7 @@ irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 
 
 ### 관리 명령어
 
-설치하면 `agent-parity` 스킬이 함께 깔려서, 어느 에이전트 안에서든 아래 명령을 실행할 수 있습니다 — 에이전트에게 실행을 요청하면(Claude Code에서는 `/agent-parity`) OS에 맞는 호출을 알아서 고릅니다.
+agent-parity는 이 명령들을 `agent-parity` 스킬로 노출하므로, 각 에이전트가 자신의 스킬 인터페이스로 실행할 수 있습니다.
 
 | 명령 | 설명 |
 | --- | --- |
@@ -89,7 +89,14 @@ irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 
 | `update` | 최신 릴리스로 관리 대상을 전부 다시 적용합니다 — 고정 런타임 메타데이터·런처·등록·스킬 배선·Claude 설정·마커 블록. |
 | `uninstall` | 프로젝트 배선을 제거하되 공유 실행 파일 캐시와, 기본적으로 메모리 저장소는 남깁니다. `--purge`를 붙이면 메모리 저장소도 지웁니다. |
 
-프로젝트 루트에서 직접 실행할 수도 있습니다: Linux/macOS/WSL은 `./.agents/bin/agent-parity <명령>`, Windows PowerShell은 `.\.agents\bin\agent-parity.cmd <명령>`.
+| 위치 | 자동 스킬 호출 | 수동 스킬 호출 |
+| --- | --- | --- |
+| Claude Code | "agent-parity 업데이트해줘" | `/agent-parity update` |
+| Codex CLI | "agent-parity 업데이트해줘" | `$agent-parity update` |
+| Cursor Agent | "agent-parity 업데이트해줘" | `/agent-parity` 입력 후 선택 |
+| Antigravity CLI | "agent-parity 업데이트해줘" | — |
+| 셸 — Linux/macOS/WSL | — | `./.agents/bin/agent-parity update` |
+| 셸 — Native Windows PowerShell | — | `.\.agents\bin\agent-parity.cmd update` |
 
 <details>
 <summary><code>status</code> 출력 항목</summary>

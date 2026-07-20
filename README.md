@@ -95,9 +95,8 @@ The `memory` MCP lets multiple agents use one memory the same way. Items marked 
 
 ### Commands
 
-Install adds an `agent-parity` skill, so you can run these from inside any
-agent — ask it to run the command (in Claude Code, `/agent-parity`) and it picks
-the right invocation for your OS.
+agent-parity exposes these as an `agent-parity` skill, so each agent can run
+them through its own skill interface.
 
 | Command | Description |
 | --- | --- |
@@ -106,9 +105,14 @@ the right invocation for your OS.
 | `update` | Re-applies everything at the latest release — pinned runtime metadata, launchers, registrations, skills wiring, Claude settings, and marker blocks. |
 | `uninstall` | Removes project wiring while leaving the shared executable cache and, by default, the memory store. Add `--purge` to delete the memory store as well. |
 
-You can also run them directly from the project root:
-`./.agents/bin/agent-parity <command>` on Linux/macOS/WSL, or
-`.\.agents\bin\agent-parity.cmd <command>` on Windows PowerShell.
+| Where | Automatic skill invocation | Manual skill invocation |
+| --- | --- | --- |
+| Claude Code | "update agent-parity" | `/agent-parity update` |
+| Codex CLI | "update agent-parity" | `$agent-parity update` |
+| Cursor Agent | "update agent-parity" | `/agent-parity` and pick it |
+| Antigravity CLI | "update agent-parity" | — |
+| Shell — Linux/macOS/WSL | — | `./.agents/bin/agent-parity update` |
+| Shell — Native Windows PowerShell | — | `.\.agents\bin\agent-parity.cmd update` |
 
 <details>
 <summary><code>status</code> output</summary>
