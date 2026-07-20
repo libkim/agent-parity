@@ -77,7 +77,6 @@ platform() {
     aarch64 | arm64) goarch=arm64 ;;
     *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
   esac
-  BIN="memory-mcp-${goos}-${goarch}"
 }
 
 local_config_editor_path() {
