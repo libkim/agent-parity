@@ -39,6 +39,11 @@ $MarkBegin = "<!-- agent-parity:begin -->"
 $MarkEnd = "<!-- agent-parity:end -->"
 $GitIgnoreBegin = "# agent-parity:begin"
 $GitIgnoreEnd = "# agent-parity:end"
+# Reinforcement frontmatter merges mechanically (each recall is an increment),
+# so a bundled git merge driver resolves concurrent-recall conflicts instead
+# of leaving strength/lastAccessed markers to the user.
+$MergeDriverCmd = '.agents/scripts/merge-memory.sh %O %A %B'
+$GaLine = ".agents/memory/*.md merge=agent-parity-memory"
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", "AGENTS.md", "CLAUDE.md")
 # Manifest diff: everything older supported releases created that the current
 # release no longer manages -- the union of their manifests minus the current
@@ -127,7 +132,7 @@ function Install-ProjectCli {
   foreach ($name in @("common.ps1", "status.ps1", "version.ps1", "uninstall.ps1", "sync-claude.ps1", "self-heal.ps1")) {
     Write-Text (Join-Path $s $name) ((Fetch-Text "templates/$name").TrimEnd("`r", "`n") + "`n")
   }
-  foreach ($name in @("common.sh", "status.sh", "version.sh", "uninstall.sh", "sync-claude.sh", "self-heal.sh")) {
+  foreach ($name in @("common.sh", "status.sh", "version.sh", "uninstall.sh", "sync-claude.sh", "self-heal.sh", "merge-memory.sh")) {
     Write-Text (Join-Path $s $name) ((Fetch-Text "templates/$name").TrimEnd("`r", "`n") + "`n")
   }
   $cmdName = if ($env:AGENT_PARITY_CMD_ACTIVE) { "agent-parity.cmd.new" } else { "agent-parity.cmd" }
@@ -378,6 +383,46 @@ function Strip-GitIgnoreBlock {
   Write-Text $gi (($out -join "`n").TrimEnd("`n") + "`n")
 }
 
+function Strip-GitAttributesBlock {
+  $ga = Path-InTarget ".gitattributes"
+  $text = Read-Text $ga
+  $lines = $text -split "`r?`n"
+  $out = New-Object System.Collections.Generic.List[string]
+  $inBlock = $false
+  foreach ($line in $lines) {
+    if ($line -eq $GitIgnoreBegin) { $inBlock = $true; continue }
+    if ($line -eq $GitIgnoreEnd) { $inBlock = $false; continue }
+    if (!$inBlock) { $out.Add($line) }
+  }
+  Write-Text $ga (($out -join "`n").TrimEnd("`n") + "`n")
+}
+
+function Sync-GitAttributes {
+  if (!(Test-GitRepo)) { return }
+  $ga = Path-InTarget ".gitattributes"
+  $state = Get-ManagedBlockState (Read-Text $ga) $GitIgnoreBegin $GitIgnoreEnd
+  if ($state -eq "valid") { Strip-GitAttributesBlock }
+  elseif ($state -eq "invalid") {
+    Write-Output ".gitattributes: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
+    return
+  }
+  $text = Read-Text $ga
+  if ($null -eq $text) { $text = "" }
+  if ($text -ne "" -and !$text.EndsWith("`n")) { $text += "`n" }
+  $text += "$GitIgnoreBegin`n$GaLine`n$GitIgnoreEnd`n"
+  Write-Text $ga $text
+  Write-Output ".gitattributes: memory files use the agent-parity merge driver"
+}
+
+# The driver definition lives in .git/config, which git never carries; the
+# committed session hooks re-register it on machines that only pull.
+function Reg-MergeDriver {
+  if (!(Test-GitRepo)) { return }
+  & git -C $Target config merge.agent-parity-memory.name "agent-parity memory reinforcement merge"
+  & git -C $Target config merge.agent-parity-memory.driver $MergeDriverCmd
+  Write-Output "git: memory merge driver registered (.git/config)"
+}
+
 function Sync-GitIgnore {
   if (!(Test-GitRepo)) { return }
   $gi = Path-InTarget ".gitignore"
@@ -515,6 +560,8 @@ function Cmd-Update {
   Reg-AgentHooks
   Sync-AgentsBlock
   Sync-GitIgnore
+  Sync-GitAttributes
+  Reg-MergeDriver
   # Tombstones go last so the converged layout is complete before anything
   # legacy disappears.
   Remove-Tombstones

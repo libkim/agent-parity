@@ -143,6 +143,8 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 
 각 메모리는 `created`, `tags`, `strength`, `lastAccessed` 프론트매터를 가진 마크다운 파일입니다. `memory_search`는 `일치 × exp(-경과일 / strength)`로 점수를 매기고, 회상할 때 `strength`를 올립니다. 그래서 자주 회상되는 메모리는 검색 상위에 오래 남고, 오래 안 쓴 메모리는 점수가 낮아져 검색에서 밀립니다.
 
+회상 기록은 동기화할 가치가 있는 상태이므로, 두 머신이 동기화 전에 같은 메모리를 회상해도 함께 설치되는 git 머지 드라이버가 충돌 대신 병합합니다: 양쪽의 회상 증가분이 합산되고 `lastAccessed`는 최신 값을 취합니다. 본문이 양쪽에서 다르게 수정된 메모리는 원래대로 충돌합니다.
+
 ### 스킬
 
 표준 Agent Skills(`<name>/SKILL.md`)를 `.agents/skills/`에 넣습니다. Codex, Cursor, Antigravity CLI는 거기서 바로 불러옵니다. Claude Code의 SessionStart 훅은 `.agents/bin/agent-parity sync-claude`를 호출하고, 프로젝트 로컬 런처가 Unix에서는 `sync-claude.sh`, native Windows에서는 `sync-claude.ps1`을 선택합니다. MCP self-heal은 별도의 Claude SessionStart 훅으로 독립 실행됩니다. 그러면 세션이 시작될 때마다 `.agents/` 원본에서 `.claude/skills`와 `.claude/settings.json`을 다시 만듭니다. 수정은 원본에만 하고, 생성된 사본은 언제든 버려도 됩니다. `.claude/settings.local.json`은 절대 건드리지 않으므로 머신 로컬 설정은 로컬에 남습니다.
@@ -160,6 +162,7 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 | `.agents/scripts/{status,version,uninstall}.{sh,ps1}` | 서로 분리된 프로젝트 로컬 관리 명령 |
 | `.agents/scripts/sync-claude.{sh,ps1}` | 스킬을 `.claude`로 미러링하는 동기화 스크립트 |
 | `.agents/scripts/self-heal.{sh,ps1}` | 관리되는 MCP 등록을 현재 OS용 런처로 재지정하는 스크립트 |
+| `.agents/scripts/merge-memory.sh` | 동시 회상을 병합하는 git 머지 드라이버 |
 | `.agents/claude/settings.json` | 플랫폼 독립 동기화 훅이 담긴 Claude 설정 원본 |
 | `.claude/settings.json` | 생성된 Claude 설정 부트스트랩; 커밋하며 `.agents/claude/settings.json`에서 갱신 |
 | `.claude/skills/` | 생성된 Claude 스킬 미러; Git에서 제외하며 세션 시작 시 갱신 |
@@ -172,6 +175,7 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 | `.codex/config.toml` | Codex에 메모리 서버 등록 |
 | `.codex/hooks.json` | Codex 세션 시작 self-heal 훅(신뢰 승인 필요) |
 | `AGENTS.md` | 마커로 구분된 지침 블록 |
+| `.gitattributes` | 메모리 파일을 머지 드라이버로 보내는 관리 블록 |
 | `CLAUDE.md` | `@AGENTS.md` 임포트 래퍼 |
 | `.gitignore` | 제외 규칙이 설치 배선이나 생성된 Claude 파일을 가릴 때 사용하는 관리 마커 블록 |
 

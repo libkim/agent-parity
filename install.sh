@@ -21,6 +21,11 @@ MARK_BEGIN="<!-- agent-parity:begin -->"
 MARK_END="<!-- agent-parity:end -->"
 GI_BEGIN="# agent-parity:begin"
 GI_END="# agent-parity:end"
+# Reinforcement frontmatter merges mechanically (each recall is an increment),
+# so a bundled git merge driver resolves concurrent-recall conflicts instead
+# of leaving strength/lastAccessed markers to the user.
+MERGE_DRIVER_CMD='.agents/scripts/merge-memory.sh %O %A %B'
+GA_LINE=".agents/memory/*.md merge=agent-parity-memory"
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.
 ARTIFACTS=".mcp.json .cursor .codex .agents AGENTS.md CLAUDE.md"
@@ -173,7 +178,7 @@ install_project_cli() {
   mkdir -p "$d" "$s"
   fetch_to templates/project-agent-parity.sh "$d/agent-parity" executable
   fetch_to templates/project-agent-parity.cmd "$d/agent-parity.cmd" executable
-  for name in common.sh status.sh version.sh uninstall.sh sync-claude.sh self-heal.sh; do
+  for name in common.sh status.sh version.sh uninstall.sh sync-claude.sh self-heal.sh merge-memory.sh; do
     fetch_to "templates/$name" "$s/$name" executable
   done
   for name in common.ps1 status.ps1 version.ps1 uninstall.ps1 sync-claude.ps1 self-heal.ps1; do
@@ -340,6 +345,47 @@ strip_gitignore_block() {
     !inblock { print }
   ' "$gi" > "$TEMP_FILE"
   commit_temp "$gi"
+}
+
+strip_gitattributes_block() {
+  ga="$TARGET/.gitattributes"
+  TEMP_FILE=$(make_temp_for "$ga")
+  awk -v b="$GI_BEGIN" -v e="$GI_END" '
+    { line = $0; sub(/\r$/, "", line) }
+    line == b { inblock = 1; next }
+    line == e { inblock = 0; next }
+    !inblock { print }
+  ' "$ga" > "$TEMP_FILE"
+  commit_temp "$ga"
+}
+
+sync_gitattributes() {
+  in_git_repo || return 0
+  ga="$TARGET/.gitattributes"
+  state=$(managed_block_state "$ga" "$GI_BEGIN" "$GI_END")
+  case "$state" in
+    valid) strip_gitattributes_block ;;
+    invalid)
+      echo ".gitattributes: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually" >&2
+      return 0
+      ;;
+  esac
+  [ -s "$ga" ] && [ -n "$(tail -c1 "$ga")" ] && echo >> "$ga"
+  {
+    echo "$GI_BEGIN"
+    echo "$GA_LINE"
+    echo "$GI_END"
+  } >> "$ga"
+  echo ".gitattributes: memory files use the agent-parity merge driver"
+}
+
+# The driver definition lives in .git/config, which git never carries; the
+# committed session hooks re-register it on machines that only pull.
+reg_merge_driver() {
+  in_git_repo || return 0
+  git -C "$TARGET" config merge.agent-parity-memory.name "agent-parity memory reinforcement merge"
+  git -C "$TARGET" config merge.agent-parity-memory.driver "$MERGE_DRIVER_CMD"
+  echo "git: memory merge driver registered (.git/config)"
 }
 
 # The vendored files must stay git-tracked to reach other machines through
@@ -530,6 +576,8 @@ cmd_install() {
   reg_agent_hooks
   sync_agents_block
   sync_gitignore
+  sync_gitattributes
+  reg_merge_driver
   # Tombstones go last so the converged layout is complete before anything
   # legacy disappears.
   remove_tombstones

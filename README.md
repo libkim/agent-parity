@@ -209,6 +209,12 @@ Each memory is a markdown file with `created`, `tags`, `strength`, and
 often-recalled memories keep ranking high while long-unused ones fall in the
 results.
 
+Recall bumps are state worth syncing, and when two machines recall the same
+memory before syncing, a bundled git merge driver combines them instead of
+raising a conflict: both sides' recall increments add up and the newest
+`lastAccessed` wins. A memory whose text was edited differently on both sides
+still conflicts, as it should.
+
 ### Skills
 
 Drop standard Agent Skills (`<name>/SKILL.md`) into `.agents/skills/`. Codex,
@@ -235,6 +241,7 @@ local.
 | `.agents/scripts/{status,version,uninstall}.{sh,ps1}` | separate project-local management commands |
 | `.agents/scripts/sync-claude.{sh,ps1}` | sync script that mirrors skills into `.claude` |
 | `.agents/scripts/self-heal.{sh,ps1}` | retargets managed MCP registrations to the current OS launcher |
+| `.agents/scripts/merge-memory.sh` | git merge driver that resolves concurrent memory recalls |
 | `.agents/claude/settings.json` | Claude settings source with the platform-neutral sync hook |
 | `.claude/settings.json` | generated Claude settings bootstrap; committed and refreshed from `.agents/claude/settings.json` |
 | `.claude/skills/` | generated Claude skill mirror; ignored by Git and refreshed at session start |
@@ -247,6 +254,7 @@ local.
 | `.codex/config.toml` | memory server registered for Codex |
 | `.codex/hooks.json` | Codex session-start self-heal hook (requires trust) |
 | `AGENTS.md` | instruction block, delimited by markers |
+| `.gitattributes` | managed block routing memory files to the merge driver |
 | `CLAUDE.md` | `@AGENTS.md` import wrapper |
 | `.gitignore` | managed marker block when exclusions would hide installed wiring or generated Claude files |
 

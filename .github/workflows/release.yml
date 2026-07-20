@@ -26,6 +26,7 @@ jobs:
       - run: sh test_install_markers.sh
       - run: sh test_readme_install.sh "${{ github.ref_name }}"
       - run: sh test_zero_install.sh "${{ github.ref_name }}"
+      - run: sh test_memory_merge.sh "${{ github.ref_name }}"
 
   test-windows:
     runs-on: windows-latest
@@ -53,6 +54,8 @@ jobs:
         run: .\test_zero_install_windows.ps1 "${{ github.ref_name }}"
       - shell: bash
         run: sh test_git_bash.sh
+      - shell: bash
+        run: sh test_memory_merge.sh "${{ github.ref_name }}"
 
   release:
     needs: [test-linux, test-windows]

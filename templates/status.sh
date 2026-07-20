@@ -55,5 +55,10 @@ fi
 if in_git_repo; then
   ign=$(ignored_artifacts | tr '\n' ' ')
   if [ -n "$ign" ]; then echo "git: IGNORED and will not sync via git: $ign(run install or update to fix)"; else echo "git: all artifacts tracked"; fi
+  if merge_driver_registered; then
+    echo "  memory merge driver: registered (.git/config)"
+  else
+    echo "  memory merge driver: missing (a session-start hook registers it)"
+  fi
 fi
 warn_parity

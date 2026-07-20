@@ -8,7 +8,7 @@ import (
 )
 
 func configEditorUsage() {
-	fmt.Fprintln(os.Stderr, "usage: agent-parity-config <ensure|command|has|merge-hook|merge-claude-settings|merge-cursor-cli|has-sync-hook|has-agent-hook|has-cursor-cli|unmerge|unmerge-hook|unmerge-claude-settings|unmerge-cursor-cli> <config> [value]")
+	fmt.Fprintln(os.Stderr, "usage: agent-parity-config <ensure|command|has|merge-hook|merge-claude-settings|merge-cursor-cli|merge-memory|has-sync-hook|has-agent-hook|has-cursor-cli|unmerge|unmerge-hook|unmerge-claude-settings|unmerge-cursor-cli> <config> [value]")
 	os.Exit(2)
 }
 
@@ -18,6 +18,9 @@ func main() {
 	}
 	op, path := os.Args[1], os.Args[2]
 	switch op {
+	case "merge-memory":
+		runMergeMemory(os.Args[2:])
+		return
 	case "ensure":
 		if len(os.Args) != 4 {
 			configEditorUsage()
