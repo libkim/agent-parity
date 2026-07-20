@@ -28,6 +28,16 @@ if ($editorOk) {
   }
 }
 
+# The merge driver definition lives in .git/config, which git never carries,
+# and machines that only pull never run install -- re-register it here.
+# Registration is not a user-facing change, so stay silent either way.
+try {
+  if ((Test-GitRepo) -and !(Test-MergeDriverRegistered)) {
+    & git -C $target config merge.agent-parity-memory.name "agent-parity memory reinforcement merge" 2>$null
+    & git -C $target config merge.agent-parity-memory.driver $MergeDriverCmd 2>$null
+  }
+} catch { }
+
 # Fill the binary cache ahead of the real MCP launch so a pruned or fresh
 # cache never turns into a silent memory outage.
 $warm = "ok"

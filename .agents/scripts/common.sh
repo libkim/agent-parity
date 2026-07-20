@@ -16,6 +16,8 @@ MARK_BEGIN="<!-- agent-parity:begin -->"
 MARK_END="<!-- agent-parity:end -->"
 GI_BEGIN="# agent-parity:begin"
 GI_END="# agent-parity:end"
+MERGE_DRIVER_CMD='.agents/scripts/merge-memory.sh %O %A %B'
+GA_LINE=".agents/memory/*.md merge=agent-parity-memory"
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.
 ARTIFACTS=".mcp.json .cursor .codex .agents AGENTS.md CLAUDE.md"
@@ -270,6 +272,22 @@ strip_gitignore_block() {
     !inblock { print }
   ' "$gi" > "$LOCAL_TEMP_FILE"
   commit_local_temp "$gi"
+}
+
+strip_gitattributes_block() {
+  ga="$TARGET/.gitattributes"
+  make_local_temp_for "$ga"
+  awk -v b="$GI_BEGIN" -v e="$GI_END" '
+    { line = $0; sub(/\r$/, "", line) }
+    line == b { inblock = 1; next }
+    line == e { inblock = 0; next }
+    !inblock { print }
+  ' "$ga" > "$LOCAL_TEMP_FILE"
+  commit_local_temp "$ga"
+}
+
+merge_driver_registered() {
+  [ "$(git -C "$TARGET" config merge.agent-parity-memory.driver 2>/dev/null)" = "$MERGE_DRIVER_CMD" ]
 }
 
 # The vendored files must stay git-tracked to reach other machines through

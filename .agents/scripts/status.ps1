@@ -44,5 +44,10 @@ if (Test-Path -LiteralPath $store -PathType Container) {
 if (Test-GitRepo) {
   $ignored = @($Artifacts | Where-Object { (Test-Path -LiteralPath (Path-InTarget $_)) -and (Test-Ignored $_) })
   if ($ignored.Count -gt 0) { Write-Output "git: IGNORED and will not sync via git: $($ignored -join ' ') (run install or update to fix)" } else { Write-Output "git: all artifacts tracked" }
+  if (Test-MergeDriverRegistered) {
+    Write-Output "  memory merge driver: registered (.git/config)"
+  } else {
+    Write-Output "  memory merge driver: missing (a session-start hook registers it)"
+  }
 }
 Warn-Parity

@@ -42,6 +42,18 @@ elif [ "$ag_state" = invalid ]; then
 elif [ -e "$ag" ] && grep -q "memory MCP server" "$ag" 2>/dev/null; then
   echo "AGENTS.md: has a memory block without markers -- remove it manually"
 fi
+ga="$TARGET/.gitattributes"
+ga_state=$(managed_block_state "$ga" "$GI_BEGIN" "$GI_END")
+if [ "$ga_state" = valid ]; then
+  strip_gitattributes_block
+  [ -s "$TARGET/.gitattributes" ] || rm -f "$TARGET/.gitattributes"
+  echo ".gitattributes: removed agent-parity block"
+elif [ "$ga_state" = invalid ]; then
+  echo ".gitattributes: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
+fi
+if in_git_repo; then
+  git -C "$TARGET" config --remove-section merge.agent-parity-memory 2>/dev/null || true
+fi
 gi="$TARGET/.gitignore"
 gi_state=$(managed_block_state "$gi" "$GI_BEGIN" "$GI_END")
 if [ "$gi_state" = valid ]; then
@@ -56,6 +68,6 @@ if [ "$PURGE" = "yes" ]; then
 else
   echo "memory store: kept at $TARGET/$STORE_DIR (pass --purge to delete it)"
 fi
-rm -f "$SCRIPT_DIR/common.sh" "$SCRIPT_DIR/status.sh" "$SCRIPT_DIR/version.sh" "$SCRIPT_DIR/uninstall.sh" "$SCRIPT_DIR/sync-claude.sh" "$SCRIPT_DIR/self-heal.sh"
+rm -f "$SCRIPT_DIR/common.sh" "$SCRIPT_DIR/status.sh" "$SCRIPT_DIR/version.sh" "$SCRIPT_DIR/uninstall.sh" "$SCRIPT_DIR/sync-claude.sh" "$SCRIPT_DIR/self-heal.sh" "$SCRIPT_DIR/merge-memory.sh"
 rm -f "$SCRIPT_DIR/common.ps1" "$SCRIPT_DIR/status.ps1" "$SCRIPT_DIR/version.ps1" "$SCRIPT_DIR/uninstall.ps1" "$SCRIPT_DIR/sync-claude.ps1" "$SCRIPT_DIR/self-heal.ps1"
 rmdir "$SCRIPT_DIR" 2>/dev/null || true

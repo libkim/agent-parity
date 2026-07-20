@@ -21,6 +21,8 @@ $MarkBegin = "<!-- agent-parity:begin -->"
 $MarkEnd = "<!-- agent-parity:end -->"
 $GitIgnoreBegin = "# agent-parity:begin"
 $GitIgnoreEnd = "# agent-parity:end"
+$MergeDriverCmd = '.agents/scripts/merge-memory.sh %O %A %B'
+$GaLine = ".agents/memory/*.md merge=agent-parity-memory"
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", "AGENTS.md", "CLAUDE.md")
 $ParityBreakers = @(
   @{ File = ".cursorrules"; Who = "Cursor" }
@@ -246,6 +248,25 @@ function Strip-GitIgnoreBlock {
   Write-Text $gi (($out -join "`n").TrimEnd("`n") + "`n")
 }
 
+
+function Strip-GitAttributesBlock {
+  $ga = Path-InTarget ".gitattributes"
+  $text = Read-Text $ga
+  $lines = $text -split "`r?`n"
+  $out = New-Object System.Collections.Generic.List[string]
+  $inBlock = $false
+  foreach ($line in $lines) {
+    if ($line -eq $GitIgnoreBegin) { $inBlock = $true; continue }
+    if ($line -eq $GitIgnoreEnd) { $inBlock = $false; continue }
+    if (!$inBlock) { $out.Add($line) }
+  }
+  Write-Text $ga (($out -join "`n").TrimEnd("`n") + "`n")
+}
+
+function Test-MergeDriverRegistered {
+  $current = & git -C $Target config merge.agent-parity-memory.driver 2>$null
+  return ($LASTEXITCODE -eq 0 -and ($current | Out-String).Trim() -eq $MergeDriverCmd)
+}
 
 function Uninstall-Skills {
   $s = Path-InTarget $SyncScript
