@@ -42,7 +42,7 @@ the same skills and instructions (`AGENTS.md`).
 
 | OS | Architectures |
 | --- | --- |
-| Linux | x86_64, arm64 (incl. Termux/Android) |
+| Linux | x86_64, arm64 |
 | macOS | x86_64, arm64 |
 | Windows | x86_64 |
 

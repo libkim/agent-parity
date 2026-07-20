@@ -37,7 +37,7 @@
 
 | OS | 아키텍처 |
 | --- | --- |
-| Linux | x86_64, arm64 (Termux/Android 포함) |
+| Linux | x86_64, arm64 |
 | macOS | x86_64, arm64 |
 | Windows | x86_64 |
 
