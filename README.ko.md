@@ -154,29 +154,29 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 | 경로 | 내용 |
 | --- | --- |
 | `.agents/mcp/memory/` | 메모리 서버 런처와 고정된 `VERSION`·`RELEASE` 메타데이터; 바이너리는 없음 |
-| `.agents/bin/` | 프로젝트 로컬 런처(`agent-parity`, `agent-parity.cmd`) |
 | `.agents/memory/` | 메모리 저장소 — 메모리 하나가 마크다운 파일 하나 |
 | `.agents/skills/` | 공유 스킬 원본 (사용자가 채우는 곳) |
 | `.agents/skills/agent-parity/` | 어느 에이전트에서든 관리 명령을 실행하는 관리 스킬 |
+| `.agents/bin/` | 프로젝트 로컬 런처(`agent-parity`, `agent-parity.cmd`) |
 | `.agents/scripts/common.{sh,ps1}` | 로컬 관리 명령이 공유하는 공통 함수 |
 | `.agents/scripts/{status,version,uninstall}.{sh,ps1}` | 서로 분리된 프로젝트 로컬 관리 명령 |
 | `.agents/scripts/sync-claude.{sh,ps1}` | 스킬을 `.claude`로 미러링하는 동기화 스크립트 |
 | `.agents/scripts/self-heal.{sh,ps1}` | 관리되는 MCP 등록을 현재 OS용 런처로 재지정하는 스크립트 |
 | `.agents/scripts/merge-memory.sh` | 동시 회상을 병합하는 git 머지 드라이버 |
 | `.agents/claude/settings.json` | 플랫폼 독립 동기화 훅이 담긴 Claude 설정 원본 |
-| `.claude/settings.json` | 생성된 Claude 설정 부트스트랩; 커밋하며 `.agents/claude/settings.json`에서 갱신 |
-| `.claude/skills/` | 생성된 Claude 스킬 미러; Git에서 제외하며 세션 시작 시 갱신 |
 | `.agents/mcp_config.json` | Antigravity CLI에 메모리 서버 등록 |
 | `.agents/hooks.json` | Antigravity self-heal 훅 |
-| `.mcp.json` | Claude Code에 메모리 서버 등록 |
+| `.claude/settings.json` | 생성된 Claude 설정 부트스트랩; 커밋하며 `.agents/claude/settings.json`에서 갱신 |
+| `.claude/skills/` | 생성된 Claude 스킬 미러; Git에서 제외하며 세션 시작 시 갱신 |
+| `.codex/config.toml` | Codex에 메모리 서버 등록 |
+| `.codex/hooks.json` | Codex 세션 시작 self-heal 훅(신뢰 승인 필요) |
 | `.cursor/mcp.json` | Cursor에 메모리 서버 등록 |
 | `.cursor/cli.json` | Cursor용 메모리 도구 자동 승인 허용목록 |
 | `.cursor/hooks.json` | Cursor 세션 시작 self-heal 훅 |
-| `.codex/config.toml` | Codex에 메모리 서버 등록 |
-| `.codex/hooks.json` | Codex 세션 시작 self-heal 훅(신뢰 승인 필요) |
+| `.mcp.json` | Claude Code에 메모리 서버 등록 |
 | `AGENTS.md` | 마커로 구분된 지침 블록 |
-| `.gitattributes` | 메모리 파일을 머지 드라이버로 보내는 관리 블록 |
 | `CLAUDE.md` | `@AGENTS.md` 임포트 래퍼 |
+| `.gitattributes` | 메모리 파일을 머지 드라이버로 보내는 관리 블록 |
 | `.gitignore` | 제외 규칙이 설치 배선이나 생성된 Claude 파일을 가릴 때 사용하는 관리 마커 블록 |
 
 `install.sh` / `install.ps1`은 원격 설치 전용 진입점입니다. `agent-parity update`를 실행하면 프로젝트 런처가 최신 릴리스의 버전 내장 `update.sh` / `update.ps1` asset을 받습니다. 스크립트에 내장된 버전이 동일 태그의 Raw 템플릿과 설정 편집기 asset을 선택하고 MCP 런처 메타데이터도 그 릴리스로 고정합니다. `.agents/scripts`에는 업데이트 파일을 두지 않습니다.

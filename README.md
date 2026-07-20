@@ -232,29 +232,29 @@ local.
 | Path | Contents |
 | --- | --- |
 | `.agents/mcp/memory/` | memory server launchers plus pinned `VERSION` and `RELEASE` metadata; no binaries |
-| `.agents/bin/` | project-local launchers (`agent-parity`, `agent-parity.cmd`) |
 | `.agents/memory/` | the memory store — one markdown file per memory |
 | `.agents/skills/` | shared skills source (yours to fill) |
 | `.agents/skills/agent-parity/` | managed skill for running the management commands from any agent |
+| `.agents/bin/` | project-local launchers (`agent-parity`, `agent-parity.cmd`) |
 | `.agents/scripts/common.{sh,ps1}` | shared functions used by the local management commands |
 | `.agents/scripts/{status,version,uninstall}.{sh,ps1}` | separate project-local management commands |
 | `.agents/scripts/sync-claude.{sh,ps1}` | sync script that mirrors skills into `.claude` |
 | `.agents/scripts/self-heal.{sh,ps1}` | retargets managed MCP registrations to the current OS launcher |
 | `.agents/scripts/merge-memory.sh` | git merge driver that resolves concurrent memory recalls |
 | `.agents/claude/settings.json` | Claude settings source with the platform-neutral sync hook |
-| `.claude/settings.json` | generated Claude settings bootstrap; committed and refreshed from `.agents/claude/settings.json` |
-| `.claude/skills/` | generated Claude skill mirror; ignored by Git and refreshed at session start |
 | `.agents/mcp_config.json` | memory server registered for Antigravity CLI |
 | `.agents/hooks.json` | Antigravity self-heal hook |
-| `.mcp.json` | memory server registered for Claude Code |
+| `.claude/settings.json` | generated Claude settings bootstrap; committed and refreshed from `.agents/claude/settings.json` |
+| `.claude/skills/` | generated Claude skill mirror; ignored by Git and refreshed at session start |
+| `.codex/config.toml` | memory server registered for Codex |
+| `.codex/hooks.json` | Codex session-start self-heal hook (requires trust) |
 | `.cursor/mcp.json` | memory server registered for Cursor |
 | `.cursor/cli.json` | memory-tool auto-approval allowlist for Cursor |
 | `.cursor/hooks.json` | Cursor session-start self-heal hook |
-| `.codex/config.toml` | memory server registered for Codex |
-| `.codex/hooks.json` | Codex session-start self-heal hook (requires trust) |
+| `.mcp.json` | memory server registered for Claude Code |
 | `AGENTS.md` | instruction block, delimited by markers |
-| `.gitattributes` | managed block routing memory files to the merge driver |
 | `CLAUDE.md` | `@AGENTS.md` import wrapper |
+| `.gitattributes` | managed block routing memory files to the merge driver |
 | `.gitignore` | managed marker block when exclusions would hide installed wiring or generated Claude files |
 
 `install.sh` / `install.ps1` are remote install-only entrypoints. For
