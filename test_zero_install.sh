@@ -8,6 +8,8 @@ trap 'rm -rf "$root"' EXIT HUP INT TERM
 
 mkdir -p "$root/.agents/scripts" "$root/.agents/mcp/memory" "$root/.cursor" "$root/.codex"
 cp "$repo/templates/common.sh" "$repo/templates/self-heal.sh" "$root/.agents/scripts/"
+cp "$repo/run.sh" "$root/.agents/mcp/memory/run.sh"
+chmod +x "$root/.agents/mcp/memory/run.sh"
 printf '%s\n' "$version" > "$root/.agents/mcp/memory/VERSION"
 printf 'file://%s/dist\n' "$repo" > "$root/.agents/mcp/memory/RELEASE"
 cat > "$root/.mcp.json" <<'EOF'
@@ -25,13 +27,15 @@ output=$(AGENT_PARITY_CACHE="$cache" sh "$root/.agents/scripts/self-heal.sh")
 printf '%s\n' "$output" | grep -qF 'Restart this agent session'
 editor="$cache/config/$version/agent-parity-config-linux-amd64"
 [ -x "$editor" ]
-[ ! -e "$cache/memory-mcp" ]
+[ -x "$cache/memory-mcp/$version/memory-mcp-linux-amd64" ]
 
 for config in .mcp.json .cursor/mcp.json .codex/config.toml .agents/mcp_config.json; do
   [ "$("$editor" command "$root/$config")" = ".agents/mcp/memory/run.sh" ]
 done
 
-# A warm cache must not touch the release URL and an unchanged repair is silent.
+# Warm caches (config editor and pre-warmed binary) must not touch the release
+# URL and an unchanged repair is silent -- any network attempt against the
+# invalid URL would fail and print a notice.
 printf '%s\n' 'https://invalid.agent-parity.test' > "$root/.agents/mcp/memory/RELEASE"
 second=$(AGENT_PARITY_CACHE="$cache" sh "$root/.agents/scripts/self-heal.sh")
 [ -z "$second" ]

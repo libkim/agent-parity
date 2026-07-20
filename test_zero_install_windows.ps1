@@ -17,27 +17,14 @@ if (!$root.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase)) { throw
 
 $oldCache = $env:AGENT_PARITY_CACHE
 try {
-  $base = "https://agent-parity.test"
-  function Invoke-WebRequest {
-    param(
-      [switch]$UseBasicParsing,
-      [Parameter(Mandatory = $true)][string]$Uri,
-      [string]$OutFile
-    )
-    $prefix = "$base/"
-    if (!$Uri.StartsWith($prefix, [StringComparison]::Ordinal)) { throw "unexpected test URL: $Uri" }
-    $relative = $Uri.Substring($prefix.Length).Replace('/', [IO.Path]::DirectorySeparatorChar)
-    $path = [IO.Path]::GetFullPath((Join-Path $testRepoRoot $relative))
-    $repoPrefix = $testRepoRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
-    if (!$path.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase) -or !(Test-Path -LiteralPath $path -PathType Leaf)) {
-      throw "test URL does not map to a repository file: $Uri"
-    }
-    if (!$OutFile) { throw "zero-install download must use an atomic staging file" }
-    Copy-Item -LiteralPath $path -Destination $OutFile -Force
-  }
+  # Real file:// URIs instead of an in-process web mock: the pre-warm path runs
+  # run.cmd in a separate process where a mocked Invoke-WebRequest cannot reach,
+  # and IWR -OutFile handles file:// on PS 5.1.
+  $base = "file:///" + ($testRepoRoot.TrimEnd('\') -replace '\\', '/')
 
   New-Item -ItemType Directory -Force -Path "$root\.agents\scripts", "$root\.agents\mcp\memory", "$root\.cursor", "$root\.codex" | Out-Null
   Copy-Item -LiteralPath (Join-Path $testRepoRoot "templates\common.ps1"),(Join-Path $testRepoRoot "templates\self-heal.ps1") -Destination "$root\.agents\scripts"
+  Copy-Item -LiteralPath (Join-Path $testRepoRoot "run.cmd") -Destination "$root\.agents\mcp\memory"
   [IO.File]::WriteAllText("$root\.agents\mcp\memory\VERSION", "$Version`n")
   [IO.File]::WriteAllText("$root\.agents\mcp\memory\RELEASE", "$base/dist`n")
   $json = '{"mcpServers":{"memory":{"command":".agents/mcp/memory/run.sh"}}}'
@@ -51,13 +38,16 @@ try {
   if (($output -join "`n") -notmatch 'Restart this agent session') { throw "cross-OS restart notice missing" }
   $editor = "$root\empty-cache\config\$Version\agent-parity-config-windows-amd64.exe"
   if (!(Test-Path -LiteralPath $editor -PathType Leaf)) { throw "self-heal did not download the config editor" }
-  if (Test-Path -LiteralPath "$root\empty-cache\memory-mcp") { throw "self-heal downloaded memory-mcp" }
+  $serverBin = "$root\empty-cache\memory-mcp\$Version\memory-mcp-windows-amd64.exe"
+  if (!(Test-Path -LiteralPath $serverBin -PathType Leaf)) { throw "self-heal did not pre-warm the memory server binary" }
 
   foreach ($config in @(".mcp.json", ".cursor\mcp.json", ".codex\config.toml", ".agents\mcp_config.json")) {
     $command = (& $editor command "$root\$config" | Out-String).Trim()
     if ($command -ne ".agents/mcp/memory/run.cmd") { throw "self-heal did not retarget $config" }
   }
 
+  # Warm caches (config editor and pre-warmed binary) must not touch the
+  # release URL: any attempt against the invalid URL would fail and notice.
   [IO.File]::WriteAllText("$root\.agents\mcp\memory\RELEASE", "https://invalid.agent-parity.test`n")
   $second = @(& "$root\.agents\scripts\self-heal.ps1")
   if ($second.Count -ne 0) { throw "warm unchanged self-heal was not silent" }
