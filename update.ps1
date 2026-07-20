@@ -194,6 +194,24 @@ function Remove-Tombstones {
   }
 }
 
+# Other versions' caches are re-downloadable derivatives, so pruning cannot
+# lose data; a dir that resists deletion (still running) just waits for the
+# next run.
+function Clear-VersionCache {
+  $cacheRoot = if ($env:AGENT_PARITY_CACHE) { $env:AGENT_PARITY_CACHE } elseif ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "agent-parity\cache" } else { Join-Path $env:USERPROFILE ".cache\agent-parity" }
+  $pruned = 0
+  foreach ($family in @("memory-mcp", "config")) {
+    $familyDir = Join-Path $cacheRoot $family
+    if (!(Test-Path -LiteralPath $familyDir -PathType Container)) { continue }
+    foreach ($dir in Get-ChildItem -LiteralPath $familyDir -Directory) {
+      if ($dir.Name -eq $Version) { continue }
+      Remove-Item -LiteralPath $dir.FullName -Recurse -Force -ErrorAction SilentlyContinue
+      if (!(Test-Path -LiteralPath $dir.FullName)) { $pruned++ }
+    }
+  }
+  if ($pruned -gt 0) { Write-Output "cache: pruned $pruned old version(s)" }
+}
+
 # Release assets have PackagedVersion replaced with their tag by build.sh. The
 # latest asset URL is resolved before this script starts, so there is no second
 # latest-release lookup here.
@@ -500,6 +518,7 @@ function Cmd-Update {
   # Tombstones go last so the converged layout is complete before anything
   # legacy disappears.
   Remove-Tombstones
+  Clear-VersionCache
   $new = Installed-Version
   if ($old -eq $new) { Write-Output "already up to date: $new" } else { Write-Output "updated: $old -> $new" }
 }

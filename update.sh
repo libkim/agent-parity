@@ -132,6 +132,23 @@ remove_tombstones() {
   done
 }
 
+# Other versions' caches are re-downloadable derivatives, so pruning cannot
+# lose data; a dir that resists deletion (still running) just waits for the
+# next run.
+gc_version_cache() {
+  gc_root=${AGENT_PARITY_CACHE:-${XDG_CACHE_HOME:-${HOME:?HOME is not set}/.cache}/agent-parity}
+  pruned=0
+  for gc_family in memory-mcp config; do
+    for gc_dir in "$gc_root/$gc_family"/*/; do
+      [ -d "$gc_dir" ] || continue
+      [ "$(basename "$gc_dir")" != "$VERSION" ] || continue
+      rm -rf "$gc_dir" 2>/dev/null || true
+      [ -d "$gc_dir" ] || pruned=$((pruned + 1))
+    done
+  done
+  [ "$pruned" -eq 0 ] || echo "cache: pruned $pruned old version(s)"
+}
+
 # Release assets have PACKAGED_VERSION replaced with their tag by build.sh.
 # The latest asset URL is resolved before this script starts, so this script
 # never performs a second latest-release lookup.
@@ -509,6 +526,7 @@ cmd_update() {
   # Tombstones go last so the converged layout is complete before anything
   # legacy disappears.
   remove_tombstones
+  gc_version_cache
   new=$(installed_version)
   if [ "$old" = "$new" ]; then
     echo "already up to date: $new"
