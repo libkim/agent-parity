@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $files = @(
-  Get-ChildItem -LiteralPath (Join-Path $repo "installers") -Filter "*.ps1" -File
+  Get-ChildItem -LiteralPath (Join-Path $repo "bootstrap") -Filter "*.ps1" -File
   Get-ChildItem -LiteralPath (Join-Path $repo "templates") -Filter "*.ps1" -File
   Get-ChildItem -LiteralPath (Join-Path $repo "tests") -Filter "*.ps1" -File
 )
