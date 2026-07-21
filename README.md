@@ -156,6 +156,7 @@ whether that session currently exposes the memory tools.
 | `git` | `all artifacts tracked` | Installed artifacts are eligible to sync through Git. |
 |  | `IGNORED ...` | One or more installed artifacts are ignored and will not sync until `install` or `update` repairs the managed `.gitignore` block. |
 |  | `memory merge driver: registered` / `missing` | Whether the git merge driver for `.agents/memory` files is registered in `.git/config`. |
+|  | `pre-push guard: registered` / `your own pre-push hook is in place` / `missing` | Whether the pre-push hook that blocks pushing uncommitted managed files is installed; a pre-existing hook is left in place. |
 | `parity` | `<file> exists ...` | An agent-specific instruction file would make agent behavior diverge; merge its content into `AGENTS.md`. |
 
 </details>
@@ -238,6 +239,10 @@ touch the same file. When they do (an explicit edit on both sides), a bundled
 git merge driver unions the tags and keeps the body if only one side changed
 it; a body edited differently on both sides conflicts, as it should.
 
+Cross-machine sharing only works if these files are committed, so a bundled
+pre-push hook refuses a push while any managed file — a new memory or a wiring
+change — is uncommitted. Bypass it once with `git push --no-verify`.
+
 ### Skills
 
 Drop standard Agent Skills (`<name>/SKILL.md`) into `.agents/skills/`. Codex,
@@ -273,6 +278,7 @@ own skills, not these.
 | `.agents/scripts/sync-claude.{sh,ps1}` | sync script that mirrors skills into `.claude` |
 | `.agents/scripts/self-heal.{sh,ps1}` | retargets managed MCP registrations to the current OS launcher |
 | `.agents/scripts/merge-memory.sh` | git merge driver that resolves concurrent memory recalls |
+| `.agents/scripts/pre-push.sh` | pre-push guard that blocks a push while managed files are uncommitted |
 | `.agents/claude/settings.json` | Claude settings source with the platform-neutral sync hook |
 | `.agents/mcp_config.json` | memory server registered for Antigravity CLI |
 | `.agents/hooks.json` | Antigravity self-heal hook |

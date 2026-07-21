@@ -44,6 +44,7 @@ $GitIgnoreEnd = "# agent-parity:end"
 # one-sided body edit instead of leaving conflict markers to the user.
 $MergeDriverCmd = '.agents/scripts/merge-memory.sh %O %A %B'
 $GaLine = ".agents/memory/*.md merge=agent-parity-memory"
+$PrePushMarker = '# agent-parity managed pre-push hook'
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", "AGENTS.md", "CLAUDE.md")
 # Manifest diff: everything older supported releases created that the current
 # release no longer manages -- the union of their manifests minus the current
@@ -132,7 +133,7 @@ function Install-ProjectCli {
   foreach ($name in @("common.ps1", "status.ps1", "version.ps1", "uninstall.ps1", "sync-claude.ps1", "self-heal.ps1")) {
     Write-Text (Join-Path $s $name) ((Fetch-Text "templates/$name").TrimEnd("`r", "`n") + "`n")
   }
-  foreach ($name in @("common.sh", "status.sh", "version.sh", "uninstall.sh", "sync-claude.sh", "self-heal.sh", "merge-memory.sh")) {
+  foreach ($name in @("common.sh", "status.sh", "version.sh", "uninstall.sh", "sync-claude.sh", "self-heal.sh", "merge-memory.sh", "pre-push.sh")) {
     Write-Text (Join-Path $s $name) ((Fetch-Text "templates/$name").TrimEnd("`r", "`n") + "`n")
   }
   $cmdName = if ($env:AGENT_PARITY_CMD_ACTIVE) { "agent-parity.cmd.new" } else { "agent-parity.cmd" }
@@ -423,6 +424,30 @@ function Reg-MergeDriver {
   Write-Output "git: memory merge driver registered (.git/config)"
 }
 
+# .git/hooks is never carried by git, so drop in a thin pre-push shim that runs
+# the tracked guard script. We own it only when our marker is present, so a
+# user's own hook is left untouched. Write-Text keeps the LF newlines git needs.
+function Get-PrePushHookPath {
+  $hp = & git -C $Target rev-parse --git-path hooks 2>$null
+  if ($LASTEXITCODE -ne 0) { return $null }
+  $hp = ($hp | Out-String).Trim()
+  $dir = if ([System.IO.Path]::IsPathRooted($hp)) { $hp } else { Join-Path $Target $hp }
+  return (Join-Path $dir "pre-push")
+}
+
+function Reg-PrePushHook {
+  if (!(Test-GitRepo)) { return }
+  $hook = Get-PrePushHookPath
+  if (!$hook) { return }
+  if ((Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*")) {
+    Write-Output "git: left your existing pre-push hook in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
+    return
+  }
+  $body = "#!/bin/sh`n" + $PrePushMarker + "`nexec `"`$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh`" `"`$@`"`n"
+  Write-Text $hook $body
+  Write-Output "git: pre-push guard registered (.git/hooks/pre-push)"
+}
+
 function Sync-GitIgnore {
   if (!(Test-GitRepo)) { return }
   $gi = Path-InTarget ".gitignore"
@@ -565,6 +590,7 @@ function Cmd-Update {
   Sync-GitIgnore
   Sync-GitAttributes
   Reg-MergeDriver
+  Reg-PrePushHook
   # Tombstones go last so the converged layout is complete before anything
   # legacy disappears.
   Remove-Tombstones

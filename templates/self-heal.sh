@@ -44,6 +44,12 @@ if in_git_repo && ! merge_driver_registered; then
   git -C "$target" config merge.agent-parity-memory.driver "$MERGE_DRIVER_CMD" 2>/dev/null || true
 fi
 
+# The pre-push guard shim lives in .git/hooks, which git never carries either;
+# re-establish it on a fresh clone. Silent, and never over a user's own hook.
+if in_git_repo && ! pre_push_hook_registered; then
+  reg_pre_push_hook 2>/dev/null || true
+fi
+
 # Fill the binary cache ahead of the real MCP launch so a pruned or fresh
 # cache never turns into a silent memory outage.
 warm=ok

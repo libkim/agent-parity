@@ -53,6 +53,10 @@ elif [ "$ga_state" = invalid ]; then
 fi
 if in_git_repo; then
   git -C "$TARGET" config --remove-section merge.agent-parity-memory 2>/dev/null || true
+  # Remove the pre-push shim only when it is ours; a user's own hook stays.
+  if pre_push_hook_registered; then
+    rm -f "$(pre_push_hook_path)"
+  fi
 fi
 gi="$TARGET/.gitignore"
 gi_state=$(managed_block_state "$gi" "$GI_BEGIN" "$GI_END")

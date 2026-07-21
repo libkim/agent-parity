@@ -46,6 +46,8 @@ if ($gaState -eq "valid") {
 }
 if (Test-GitRepo) {
   & git -C $Target config --remove-section merge.agent-parity-memory 2>$null
+  # Remove the pre-push shim only when it is ours; a user's own hook stays.
+  if (Test-PrePushHookRegistered) { Remove-Item -LiteralPath (Get-PrePushHookPath) -Force -ErrorAction SilentlyContinue }
 }
 $gitIgnoreText = Read-Text (Path-InTarget ".gitignore")
 $gitIgnoreState = Get-ManagedBlockState $gitIgnoreText $GitIgnoreBegin $GitIgnoreEnd
@@ -61,6 +63,6 @@ if ($Purge) {
 } else {
   Write-Output "memory store: kept at $(Path-InTarget $StoreDir) (pass --purge to delete it)"
 }
-foreach ($name in @("common.ps1", "status.ps1", "version.ps1", "uninstall.ps1", "sync-claude.ps1", "self-heal.ps1", "common.sh", "status.sh", "version.sh", "uninstall.sh", "sync-claude.sh", "self-heal.sh", "merge-memory.sh")) {
+foreach ($name in @("common.ps1", "status.ps1", "version.ps1", "uninstall.ps1", "sync-claude.ps1", "self-heal.ps1", "common.sh", "status.sh", "version.sh", "uninstall.sh", "sync-claude.sh", "self-heal.sh", "merge-memory.sh", "pre-push.sh")) {
   Remove-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Force -ErrorAction SilentlyContinue
 }

@@ -41,6 +41,7 @@ jobs:
       - run: sh tests/test_zero_install.sh "${{ inputs.version || github.ref_name }}"
       - run: sh tests/test_memory_merge.sh "${{ inputs.version || github.ref_name }}"
       - run: sh tests/test_update.sh
+      - run: sh tests/test_pre_push.sh
 
   test-windows:
     runs-on: windows-latest

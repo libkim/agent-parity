@@ -49,5 +49,12 @@ if (Test-GitRepo) {
   } else {
     Write-Output "  memory merge driver: missing (a session-start hook registers it)"
   }
+  if (Test-PrePushHookRegistered) {
+    Write-Output "  pre-push guard: registered (.git/hooks/pre-push)"
+  } elseif (Test-PrePushHookForeign) {
+    Write-Output "  pre-push guard: your own pre-push hook is in place (not replaced)"
+  } else {
+    Write-Output "  pre-push guard: missing (a session-start hook registers it)"
+  }
 }
 Warn-Parity

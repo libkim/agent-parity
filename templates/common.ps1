@@ -23,6 +23,7 @@ $GitIgnoreBegin = "# agent-parity:begin"
 $GitIgnoreEnd = "# agent-parity:end"
 $MergeDriverCmd = '.agents/scripts/merge-memory.sh %O %A %B'
 $GaLine = ".agents/memory/*.md merge=agent-parity-memory"
+$PrePushMarker = '# agent-parity managed pre-push hook'
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", "AGENTS.md", "CLAUDE.md")
 $ParityBreakers = @(
   @{ File = ".cursorrules"; Who = "Cursor" }
@@ -266,6 +267,38 @@ function Strip-GitAttributesBlock {
 function Test-MergeDriverRegistered {
   $current = & git -C $Target config merge.agent-parity-memory.driver 2>$null
   return ($LASTEXITCODE -eq 0 -and ($current | Out-String).Trim() -eq $MergeDriverCmd)
+}
+
+# .git/hooks is never carried by git, so the pre-push guard is a thin shim that
+# runs the tracked script and is re-established by install/update/self-heal.
+function Get-PrePushHookPath {
+  $hp = & git -C $Target rev-parse --git-path hooks 2>$null
+  if ($LASTEXITCODE -ne 0) { return $null }
+  $hp = ($hp | Out-String).Trim()
+  $dir = if ([System.IO.Path]::IsPathRooted($hp)) { $hp } else { Join-Path $Target $hp }
+  return (Join-Path $dir "pre-push")
+}
+
+function Test-PrePushHookRegistered {
+  $hook = Get-PrePushHookPath
+  return ($hook -and (Test-Path -LiteralPath $hook) -and ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*"))
+}
+
+function Test-PrePushHookForeign {
+  $hook = Get-PrePushHookPath
+  return ($hook -and (Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*"))
+}
+
+# Write our shim only when there is no hook, or the existing one is ours; a
+# user's own pre-push hook is left untouched. Write-Text keeps the LF newlines
+# git needs to run the hook.
+function Register-PrePushHook {
+  if (!(Test-GitRepo)) { return }
+  $hook = Get-PrePushHookPath
+  if (!$hook) { return }
+  if (Test-PrePushHookForeign) { return }
+  $body = "#!/bin/sh`n" + $PrePushMarker + "`nexec `"`$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh`" `"`$@`"`n"
+  Write-Text $hook $body
 }
 
 function Uninstall-Skills {

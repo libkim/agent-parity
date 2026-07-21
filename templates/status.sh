@@ -60,5 +60,12 @@ if in_git_repo; then
   else
     echo "  memory merge driver: missing (a session-start hook registers it)"
   fi
+  if pre_push_hook_registered; then
+    echo "  pre-push guard: registered (.git/hooks/pre-push)"
+  elif pre_push_hook_foreign; then
+    echo "  pre-push guard: your own pre-push hook is in place (not replaced)"
+  else
+    echo "  pre-push guard: missing (a session-start hook registers it)"
+  fi
 fi
 warn_parity

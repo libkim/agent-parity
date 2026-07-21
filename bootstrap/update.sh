@@ -26,6 +26,9 @@ GI_END="# agent-parity:end"
 # one-sided body edit instead of leaving conflict markers to the user.
 MERGE_DRIVER_CMD='.agents/scripts/merge-memory.sh %O %A %B'
 GA_LINE=".agents/memory/*.md merge=agent-parity-memory"
+# Marks the pre-push hook we own, so we update ours but never clobber a
+# hook the user wrote.
+PRE_PUSH_MARKER='# agent-parity managed pre-push hook'
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.
 ARTIFACTS=".mcp.json .cursor .codex .agents AGENTS.md CLAUDE.md"
@@ -177,7 +180,7 @@ install_project_cli() {
   mkdir -p "$d" "$s"
   fetch_to templates/project-agent-parity.sh "$d/agent-parity" executable
   fetch_to templates/project-agent-parity.cmd "$d/agent-parity.cmd" executable
-  for name in common.sh status.sh version.sh uninstall.sh sync-claude.sh self-heal.sh merge-memory.sh; do
+  for name in common.sh status.sh version.sh uninstall.sh sync-claude.sh self-heal.sh merge-memory.sh pre-push.sh; do
     fetch_to "templates/$name" "$s/$name" executable
   done
   for name in common.ps1 status.ps1 version.ps1 uninstall.ps1 sync-claude.ps1 self-heal.ps1; do
@@ -387,6 +390,31 @@ reg_merge_driver() {
   echo "git: memory merge driver registered (.git/config)"
 }
 
+# .git/hooks is never carried by git, so install (and self-heal on a fresh
+# clone) drops in a thin pre-push shim that runs the tracked guard script. We own
+# it only when our marker is present, so a user's own hook is left untouched.
+pre_push_hook_path() {
+  hp=$(git -C "$TARGET" rev-parse --git-path hooks 2>/dev/null) || return 1
+  case "$hp" in /*) echo "$hp/pre-push" ;; *) echo "$TARGET/$hp/pre-push" ;; esac
+}
+
+reg_pre_push_hook() {
+  in_git_repo || return 0
+  hook=$(pre_push_hook_path) || return 0
+  if [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null; then
+    echo "git: left your existing pre-push hook in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
+    return 0
+  fi
+  mkdir -p "$(dirname "$hook")"
+  cat > "$hook" <<EOF
+#!/bin/sh
+$PRE_PUSH_MARKER
+exec "\$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh" "\$@"
+EOF
+  chmod +x "$hook"
+  echo "git: pre-push guard registered (.git/hooks/pre-push)"
+}
+
 # The vendored files must stay git-tracked to reach other machines through
 # git. Where the project's .gitignore hides any of them, keep a marked block
 # of un-ignore rules; recompute it from scratch each run so it stays minimal.
@@ -573,6 +601,7 @@ cmd_update() {
   sync_gitignore
   sync_gitattributes
   reg_merge_driver
+  reg_pre_push_hook
   # Tombstones go last so the converged layout is complete before anything
   # legacy disappears.
   remove_tombstones

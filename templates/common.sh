@@ -18,6 +18,7 @@ GI_BEGIN="# agent-parity:begin"
 GI_END="# agent-parity:end"
 MERGE_DRIVER_CMD='.agents/scripts/merge-memory.sh %O %A %B'
 GA_LINE=".agents/memory/*.md merge=agent-parity-memory"
+PRE_PUSH_MARKER='# agent-parity managed pre-push hook'
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.
 ARTIFACTS=".mcp.json .cursor .codex .agents AGENTS.md CLAUDE.md"
@@ -287,6 +288,38 @@ strip_gitattributes_block() {
 
 merge_driver_registered() {
   [ "$(git -C "$TARGET" config merge.agent-parity-memory.driver 2>/dev/null)" = "$MERGE_DRIVER_CMD" ]
+}
+
+# .git/hooks is never carried by git, so the pre-push guard is a thin shim that
+# runs the tracked script and is re-established by install/update/self-heal.
+pre_push_hook_path() {
+  hp=$(git -C "$TARGET" rev-parse --git-path hooks 2>/dev/null) || return 1
+  case "$hp" in /*) echo "$hp/pre-push" ;; *) echo "$TARGET/$hp/pre-push" ;; esac
+}
+
+pre_push_hook_registered() {
+  hook=$(pre_push_hook_path) || return 1
+  [ -e "$hook" ] && grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null
+}
+
+pre_push_hook_foreign() {
+  hook=$(pre_push_hook_path) || return 1
+  [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null
+}
+
+# Write our shim only when there is no hook, or the existing one is ours; a
+# user's own pre-push hook is left untouched.
+reg_pre_push_hook() {
+  in_git_repo || return 0
+  hook=$(pre_push_hook_path) || return 0
+  ! pre_push_hook_foreign || return 0
+  mkdir -p "$(dirname "$hook")"
+  cat > "$hook" <<EOF
+#!/bin/sh
+$PRE_PUSH_MARKER
+exec "\$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh" "\$@"
+EOF
+  chmod +x "$hook"
 }
 
 # The vendored files must stay git-tracked to reach other machines through

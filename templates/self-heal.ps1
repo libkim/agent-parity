@@ -36,6 +36,9 @@ try {
     & git -C $target config merge.agent-parity-memory.name "agent-parity memory merge" 2>$null
     & git -C $target config merge.agent-parity-memory.driver $MergeDriverCmd 2>$null
   }
+  if ((Test-GitRepo) -and !(Test-PrePushHookRegistered)) {
+    Register-PrePushHook
+  }
 } catch { }
 
 # Fill the binary cache ahead of the real MCP launch so a pruned or fresh
