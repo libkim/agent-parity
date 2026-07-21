@@ -487,13 +487,16 @@ function Install-Skills {
   Write-Output "skills:"
   New-Item -ItemType Directory -Force -Path (Path-InTarget ".agents/skills") | Out-Null
   Adopt-AgentSkills
-  # The agent-parity skill lets any agent run the management commands without the
-  # user typing OS-specific paths. It is a generated shim we own outright (like
-  # run.cmd), so overwrite it every run to keep it current.
-  $msk = Path-InTarget ".agents/skills/agent-parity"
-  New-Item -ItemType Directory -Force -Path $msk | Out-Null
-  Write-Text (Join-Path $msk "SKILL.md") ((Fetch-Text "templates/agent-parity.skill.md").TrimEnd("`r", "`n") + "`n")
-  Write-Output "  wrote:      .agents/skills/agent-parity/SKILL.md"
+  # These are the skills we ship: agent-parity runs the management commands
+  # without the user typing OS-specific paths, and write-requirement/
+  # write-governance are the default authoring skills. They are generated files
+  # we own outright (like run.cmd), so overwrite them every run to keep current.
+  foreach ($sk in @("agent-parity", "write-requirement", "write-governance")) {
+    $d = Path-InTarget ".agents/skills/$sk"
+    New-Item -ItemType Directory -Force -Path $d | Out-Null
+    Write-Text (Join-Path $d "SKILL.md") ((Fetch-Text "templates/$sk.skill.md").TrimEnd("`r", "`n") + "`n")
+    Write-Output "  wrote:      .agents/skills/$sk/SKILL.md"
+  }
   if (!(Get-ChildItem -LiteralPath (Path-InTarget ".agents/skills") -Force | Select-Object -First 1)) {
     Write-Text (Path-InTarget ".agents/skills/.gitkeep") ""
   }

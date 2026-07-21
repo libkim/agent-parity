@@ -464,13 +464,16 @@ install_skills() {
   echo "skills:"
   mkdir -p "$TARGET/.agents/skills"
   adopt_agent_skills
-  # The agent-parity skill lets any agent run the management commands without the
-  # user typing OS-specific paths. It is a generated shim we own outright (like
-  # run.sh), so overwrite it every run to keep it current.
-  msk="$TARGET/.agents/skills/agent-parity"
-  mkdir -p "$msk"
-  fetch_to templates/agent-parity.skill.md "$msk/SKILL.md"
-  echo "  wrote:      .agents/skills/agent-parity/SKILL.md"
+  # These are the skills we ship: agent-parity runs the management commands
+  # without the user typing OS-specific paths, and write-requirement/
+  # write-governance are the default authoring skills. They are generated files
+  # we own outright (like run.sh), so overwrite them every run to keep current.
+  for sk in agent-parity write-requirement write-governance; do
+    d="$TARGET/.agents/skills/$sk"
+    mkdir -p "$d"
+    fetch_to "templates/$sk.skill.md" "$d/SKILL.md"
+    echo "  wrote:      .agents/skills/$sk/SKILL.md"
+  done
   [ -n "$(ls -A "$TARGET/.agents/skills" 2>/dev/null)" ] || : > "$TARGET/.agents/skills/.gitkeep"
   # sync-claude.sh is a generated shim we own outright (like run.sh), so
   # overwrite it every run to keep it current -- user skills live in
