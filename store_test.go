@@ -71,3 +71,37 @@ func TestSearchCRLFMemoryDoesNotNestFrontmatter(t *testing.T) {
 		t.Fatalf("reinforced file was not normalized to LF: %q", text)
 	}
 }
+
+func TestAtomicWriteLeavesNoTempAndReadsBack(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := s.Add("atomic body", []string{"x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No leftover temp files in the store directory.
+	names, _ := os.ReadDir(dir)
+	for _, n := range names {
+		if strings.HasSuffix(n.Name(), ".tmp") || strings.Contains(n.Name(), ".tmp") {
+			t.Fatalf("leftover temp file: %s", n.Name())
+		}
+	}
+	if len(names) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(names))
+	}
+	// Reads back cleanly, and a rewrite (reinforce) replaces atomically.
+	got, err := s.Get(e.ID)
+	if err != nil || got.Body != "atomic body" {
+		t.Fatalf("readback failed: %v / %q", err, got.Body)
+	}
+	if _, err := s.Search("atomic", 5); err != nil {
+		t.Fatal(err)
+	}
+	names, _ = os.ReadDir(dir)
+	if len(names) != 1 {
+		t.Fatalf("after reinforce expected 1 file, got %d", len(names))
+	}
+}

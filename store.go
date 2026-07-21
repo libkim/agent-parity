@@ -77,7 +77,45 @@ func (s *Store) write(e Entry) error {
 		return err
 	}
 	content := "---\n" + string(y) + "---\n" + e.Body + "\n"
-	return os.WriteFile(s.path(e.ID), []byte(content), 0o644)
+	return atomicWrite(s.path(e.ID), []byte(content), 0o644)
+}
+
+// atomicWrite writes data to a temp file in the same directory and renames it
+// over path. A concurrent reader — including a cloud-sync client watching the
+// folder — sees either the previous complete file or the new one, never a
+// half-written file, since the partial content only ever lives under the temp
+// name. The rename is atomic on POSIX and replaces the target on Windows.
+func atomicWrite(path string, data []byte, perm os.FileMode) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			os.Remove(tmp)
+		}
+	}()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, perm); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 func (s *Store) read(id string) (Entry, error) {
