@@ -80,16 +80,6 @@ irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 
 
 Claude Code의 사전 승인은 정확한 프로젝트 폴더가 신뢰돼 있어야 적용됩니다. 상위 폴더만 신뢰된 경우 신뢰 다이얼로그는 생략되지만 memory 서버 승인 창이 한 번 뜹니다([claude-code#79612](https://github.com/anthropics/claude-code/issues/79612)).
 
-### 스킬
-
-설치하면 공유 원본 `.agents/skills/`에 세 스킬을 넣어 모든 에이전트가 같은 스킬을 봅니다.
-
-- `agent-parity` — 아래 관리 명령들을 에이전트 자신의 스킬 인터페이스로 실행합니다.
-- `write-requirement` — 작업을 시작하기 전에 요청을 검증 가능한 요구사항으로 정리합니다.
-- `write-governance` — 매 세션에 접붙일 만한 프로젝트 상시 규칙을 작성합니다.
-
-두 작성 스킬은 메모리 도구와 맞물립니다. 각각 작성을 안내하고, 확정된 결과를 `memory_add`로 저장합니다(요구사항은 context, 규칙은 governance). 셋 다 `update`가 다시 생성하며, 그 옆에 둔 사용자 스킬은 건드리지 않습니다.
-
 ### 관리 명령어
 
 agent-parity는 관리 명령들을 `agent-parity` 스킬로 노출하므로, 각 에이전트가 자신의 스킬 인터페이스로 실행할 수 있습니다.
@@ -173,6 +163,8 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 ### 스킬
 
 표준 Agent Skills(`<name>/SKILL.md`)를 `.agents/skills/`에 넣습니다. Codex, Cursor, Antigravity CLI는 거기서 바로 불러옵니다. Claude Code의 SessionStart 훅은 `.agents/bin/agent-parity sync-claude`를 호출하고, 프로젝트 로컬 런처가 Unix에서는 `sync-claude.sh`, Windows에서는 `sync-claude.ps1`을 선택합니다. MCP self-heal은 별도의 Claude SessionStart 훅으로 독립 실행됩니다. 그러면 세션이 시작될 때마다 `.agents/` 원본에서 `.claude/skills`와 `.claude/settings.json`을 다시 만듭니다. 수정은 원본에만 하고, 생성된 사본은 언제든 버려도 됩니다. `.claude/settings.local.json`은 절대 건드리지 않으므로 머신 로컬 설정은 로컬에 남습니다.
+
+설치는 이 원본에 자체 스킬도 넣습니다: `agent-parity`(관리 명령), 그리고 작성 스킬 `write-requirement`(요청을 검증 가능한 요구사항으로 정리)와 `write-governance`(프로젝트 상시 규칙 작성). 런처와 마찬가지로 이들은 `update`가 다시 생성하므로, 이 스킬들이 아니라 사용자 자신의 스킬을 수정하세요.
 
 ## 설치 시 생성되는 파일
 

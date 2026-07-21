@@ -97,20 +97,6 @@ Claude Code's pre-approval needs the exact project folder trusted. If only a
 parent directory is trusted, the trust dialog is skipped but the memory server
 still prompts for approval once ([claude-code#79612](https://github.com/anthropics/claude-code/issues/79612)).
 
-### Skills
-
-Installation writes three skills into the shared `.agents/skills/` source, so every
-agent sees the same ones:
-
-- `agent-parity` — runs the management commands below through the agent's own skill interface.
-- `write-requirement` — turns a request into a clear, testable requirement before work starts.
-- `write-governance` — writes a standing project rule worth folding into every session.
-
-The two authoring skills pair with the memory tools: each guides the writing, and
-its settled result is stored with `memory_add` (a requirement as context, a rule as
-governance). All three are regenerated on `update`; your own skills alongside them
-are left untouched.
-
 ### Commands
 
 agent-parity exposes these management commands as an `agent-parity` skill, so each agent can run
@@ -261,6 +247,12 @@ SessionStart hook runs MCP self-heal independently. Edit only the source;
 the generated copy is disposable.
 `.claude/settings.local.json` is never touched, so machine-local settings stay
 local.
+
+Installation also writes its own skills into this source: `agent-parity` (the
+management commands), plus the authoring skills `write-requirement` (turn a
+request into a testable requirement) and `write-governance` (write a standing
+project rule). Like the launchers, these are regenerated on `update` — edit your
+own skills, not these.
 
 ## Files the install creates
 
