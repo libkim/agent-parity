@@ -279,10 +279,12 @@ function Uninstall-Skills {
     if ($LASTEXITCODE -ne 0) { throw "could not safely update $f" }
   }
   Remove-Item -LiteralPath $s -Force -ErrorAction SilentlyContinue
-  # The agent-parity skill is our wiring, not a user skill: remove both the
-  # source and Claude's synced copy so no dangling copy survives uninstall.
-  Remove-Item -LiteralPath (Path-InTarget ".agents/skills/agent-parity") -Recurse -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath (Path-InTarget ".claude/skills/agent-parity") -Recurse -Force -ErrorAction SilentlyContinue
+  # The skills we ship are our wiring, not user skills: remove both the source
+  # and Claude's synced copy so no dangling copy survives uninstall.
+  foreach ($sk in @("agent-parity", "write-requirement", "write-governance")) {
+    Remove-Item -LiteralPath (Path-InTarget ".agents/skills/$sk") -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Path-InTarget ".claude/skills/$sk") -Recurse -Force -ErrorAction SilentlyContinue
+  }
   Write-Output "skills: removed sync wiring"
 }
 
@@ -302,13 +304,15 @@ function Status-Skills {
   $skillDir = Path-InTarget ".agents/skills"
   $n = 0
   if (Test-Path -LiteralPath $skillDir) {
-    $n = @(Get-ChildItem -LiteralPath $skillDir -Directory | Where-Object { $_.Name -ne "agent-parity" }).Count
+    $n = @(Get-ChildItem -LiteralPath $skillDir -Directory | Where-Object { $_.Name -notin @("agent-parity", "write-requirement", "write-governance") }).Count
   }
   Write-Output "skills: $n in .agents/skills; sync script present"
-  if (Test-Path -LiteralPath (Join-Path $skillDir "agent-parity/SKILL.md")) {
-    Write-Output "  management skill: present"
-  } else {
-    Write-Output "  management skill: missing"
+  foreach ($sk in @("agent-parity", "write-requirement", "write-governance")) {
+    if (Test-Path -LiteralPath (Join-Path $skillDir "$sk/SKILL.md")) {
+      Write-Output "  shipped skill $sk`: present"
+    } else {
+      Write-Output "  shipped skill $sk`: missing"
+    }
   }
   if (!(Test-Path -LiteralPath $ConfigEditor -PathType Leaf)) { Write-Output "  hook: unknown (local config editor missing)"; return }
   & $ConfigEditor has-sync-hook (Path-InTarget $ClaudeSrc) $ClaudeHook 2>$null
