@@ -93,6 +93,10 @@ The `memory` MCP lets multiple agents use one memory the same way. Items marked 
 | Cursor Agent | Required | Not required |
 | Antigravity CLI | Not required | Required |
 
+Claude Code's pre-approval needs the exact project folder trusted. If only a
+parent directory is trusted, the trust dialog is skipped but the memory server
+still prompts for approval once ([claude-code#79612](https://github.com/anthropics/claude-code/issues/79612)).
+
 ### Commands
 
 agent-parity exposes these management commands as an `agent-parity` skill, so each agent can run

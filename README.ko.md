@@ -78,6 +78,8 @@ irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 
 | Cursor Agent | 필요 | 불필요 |
 | Antigravity CLI | 불필요 | 필요 |
 
+Claude Code의 사전 승인은 정확한 프로젝트 폴더가 신뢰돼 있어야 적용됩니다. 상위 폴더만 신뢰된 경우 신뢰 다이얼로그는 생략되지만 memory 서버 승인 창이 한 번 뜹니다([claude-code#79612](https://github.com/anthropics/claude-code/issues/79612)).
+
 ### 관리 명령어
 
 agent-parity는 관리 명령들을 `agent-parity` 스킬로 노출하므로, 각 에이전트가 자신의 스킬 인터페이스로 실행할 수 있습니다.
