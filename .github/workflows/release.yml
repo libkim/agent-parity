@@ -40,6 +40,7 @@ jobs:
       - run: sh tests/test_readme_install.sh "${{ inputs.version || github.ref_name }}"
       - run: sh tests/test_zero_install.sh "${{ inputs.version || github.ref_name }}"
       - run: sh tests/test_memory_merge.sh "${{ inputs.version || github.ref_name }}"
+      - run: sh tests/test_update.sh
 
   test-windows:
     runs-on: windows-latest
@@ -69,6 +70,8 @@ jobs:
         run: sh tests/test_git_bash.sh
       - shell: bash
         run: sh tests/test_memory_merge.sh "${{ inputs.version || github.ref_name }}"
+      - shell: bash
+        run: sh tests/test_update.sh
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
