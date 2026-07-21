@@ -2,6 +2,8 @@
 /.agents/mcp/memory/dist/
 /memory/
 /.cache/
+# a bare `go build` drops the binary here under the module name
+/memory-mcp
 # agent-parity:begin
 /.agents/mcp/memory/dist/
 /.claude/*

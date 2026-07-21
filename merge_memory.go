@@ -17,9 +17,10 @@ var errMemoryMergeConflict = errors.New("memory bodies changed on both sides")
 
 // mergeMemoryFiles is the git merge driver for memory markdown files: called
 // with base (%O), ours (%A), theirs (%B), it writes the merged entry to ours.
-// Reinforcement frontmatter merges without conflict — strength takes the
-// higher side and lastAccessed the newest — while a body edited to different
-// content on both sides is a real conflict left to the user.
+// Tags union and created is preserved; a body edited to different content on
+// both sides is a real conflict left to the user. Memory files are normally
+// created once under a unique id and never rewritten, so same-file conflicts
+// are rare — this driver only matters for the occasional explicit edit.
 func mergeMemoryFiles(basePath, oursPath, theirsPath string) error {
 	baseRaw, err := os.ReadFile(basePath)
 	if err != nil {
@@ -63,31 +64,23 @@ func mergeMemoryFiles(basePath, oursPath, theirsPath string) error {
 		return errMemoryMergeConflict
 	}
 
-	merged.Strength = maxInt(ours.Strength, theirs.Strength)
-	if merged.Strength < 1 {
-		merged.Strength = 1
-	}
-
-	if theirs.LastAccessed.After(merged.LastAccessed) {
-		merged.LastAccessed = theirs.LastAccessed
-	}
 	if merged.Created.IsZero() {
 		merged.Created = theirs.Created
 	}
-
 	merged.Tags = mergeTags(base.Tags, ours.Tags, theirs.Tags)
 
 	y, err := yaml.Marshal(frontmatter{
-		Created:      merged.Created,
-		Tags:         merged.Tags,
-		Strength:     merged.Strength,
-		LastAccessed: merged.LastAccessed,
+		Created: merged.Created,
+		Tags:    merged.Tags,
 	})
 	if err != nil {
 		return err
 	}
 	content := "---\n" + string(y) + "---\n" + merged.Body + "\n"
-	return os.WriteFile(oursPath, []byte(content), 0o644)
+	// Same atomic temp+rename as the server's writer: the driver runs during a
+	// git merge, and a sync client watching the folder must never see a
+	// half-written memory file.
+	return atomicWrite(oursPath, []byte(content), 0o644)
 }
 
 // mergeTags keeps ours (which reflects any removals made there) and adds the
@@ -112,13 +105,6 @@ func mergeTags(base, ours, theirs []string) []string {
 		return nil
 	}
 	return merged
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func runMergeMemory(args []string) {

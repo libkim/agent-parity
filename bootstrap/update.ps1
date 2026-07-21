@@ -39,9 +39,9 @@ $MarkBegin = "<!-- agent-parity:begin -->"
 $MarkEnd = "<!-- agent-parity:end -->"
 $GitIgnoreBegin = "# agent-parity:begin"
 $GitIgnoreEnd = "# agent-parity:end"
-# Reinforcement frontmatter merges mechanically (each recall is an increment),
-# so a bundled git merge driver resolves concurrent-recall conflicts instead
-# of leaving strength/lastAccessed markers to the user.
+# Memory files rarely change after creation, but an explicit edit on both
+# sides can conflict; a bundled git merge driver unions tags and resolves a
+# one-sided body edit instead of leaving conflict markers to the user.
 $MergeDriverCmd = '.agents/scripts/merge-memory.sh %O %A %B'
 $GaLine = ".agents/memory/*.md merge=agent-parity-memory"
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", "AGENTS.md", "CLAUDE.md")
@@ -418,7 +418,7 @@ function Sync-GitAttributes {
 # committed session hooks re-register it on machines that only pull.
 function Reg-MergeDriver {
   if (!(Test-GitRepo)) { return }
-  & git -C $Target config merge.agent-parity-memory.name "agent-parity memory reinforcement merge"
+  & git -C $Target config merge.agent-parity-memory.name "agent-parity memory merge"
   & git -C $Target config merge.agent-parity-memory.driver $MergeDriverCmd
   Write-Output "git: memory merge driver registered (.git/config)"
 }

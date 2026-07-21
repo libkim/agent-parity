@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,19 +15,34 @@ import (
 // Entry is one stored memory. The markdown file is the source of truth;
 // these fields are parsed from its YAML frontmatter plus body.
 type Entry struct {
-	ID           string    `json:"id"`
-	Body         string    `json:"body"`
-	Tags         []string  `json:"tags"`
-	Created      time.Time `json:"created"`
-	Strength     int       `json:"strength"`
-	LastAccessed time.Time `json:"lastAccessed"`
+	ID      string    `json:"id"`
+	Body    string    `json:"body"`
+	Tags    []string  `json:"tags"`
+	Created time.Time `json:"created"`
+	// Type is "governance" (a durable project rule pushed into every session
+	// through the server Instructions) or "context" (ordinary working memory
+	// returned by recent/search). A missing field means context.
+	Type string `json:"type"`
 }
 
+// frontmatter is both the write schema and the fields read back. Older memory
+// files may still carry strength/lastAccessed; yaml.Unmarshal ignores unknown
+// keys, so those files parse and the retired fields are dropped. New writes
+// never emit them. Type is omitted for context memories, so only governance
+// memories carry it and files written before the field stay unchanged.
 type frontmatter struct {
-	Created      time.Time `yaml:"created"`
-	Tags         []string  `yaml:"tags"`
-	Strength     int       `yaml:"strength"`
-	LastAccessed time.Time `yaml:"lastAccessed"`
+	Created time.Time `yaml:"created"`
+	Tags    []string  `yaml:"tags"`
+	Type    string    `yaml:"type,omitempty"`
+}
+
+// memoryType canonicalizes the type: "governance" only when explicitly set,
+// otherwise "context" (the default and the meaning of a missing field).
+func memoryType(t string) string {
+	if t == "governance" {
+		return "governance"
+	}
+	return "context"
 }
 
 // Store is a directory of markdown files, one file per memory.
@@ -46,19 +60,19 @@ func NewStore(dir string) (*Store, error) {
 
 func (s *Store) path(id string) string { return filepath.Join(s.dir, id+".md") }
 
-// Add writes a new memory and returns it.
-func (s *Store) Add(body string, tags []string) (Entry, error) {
+// Add writes a new memory and returns it. typ is "governance" or "context"
+// (empty defaults to context).
+func (s *Store) Add(body string, tags []string, typ string) (Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	now := time.Now().UTC()
 	e := Entry{
-		ID:           fmt.Sprintf("%d", now.UnixNano()),
-		Body:         strings.TrimSpace(body),
-		Tags:         tags,
-		Created:      now,
-		Strength:     1,
-		LastAccessed: now,
+		ID:      fmt.Sprintf("%d", now.UnixNano()),
+		Body:    strings.TrimSpace(body),
+		Tags:    tags,
+		Created: now,
+		Type:    memoryType(typ),
 	}
 	if err := s.write(e); err != nil {
 		return Entry{}, err
@@ -67,12 +81,11 @@ func (s *Store) Add(body string, tags []string) (Entry, error) {
 }
 
 func (s *Store) write(e Entry) error {
-	y, err := yaml.Marshal(frontmatter{
-		Created:      e.Created,
-		Tags:         e.Tags,
-		Strength:     e.Strength,
-		LastAccessed: e.LastAccessed,
-	})
+	fm := frontmatter{Created: e.Created, Tags: e.Tags}
+	if e.Type == "governance" {
+		fm.Type = "governance" // context is the default, so it stays out of the file
+	}
+	y, err := yaml.Marshal(fm)
 	if err != nil {
 		return err
 	}
@@ -131,27 +144,23 @@ func parseEntry(id string, raw []byte) (Entry, error) {
 	// frontmatter against one canonical newline form while keeping writes LF.
 	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	if !strings.HasPrefix(text, "---\n") {
-		return Entry{ID: id, Body: strings.TrimSpace(text), Strength: 1}, nil
+		return Entry{ID: id, Body: strings.TrimSpace(text)}, nil
 	}
 	rest := text[len("---\n"):]
 	idx := strings.Index(rest, "\n---\n")
 	if idx < 0 {
-		return Entry{ID: id, Body: strings.TrimSpace(text), Strength: 1}, nil
+		return Entry{ID: id, Body: strings.TrimSpace(text)}, nil
 	}
 	var fm frontmatter
 	if err := yaml.Unmarshal([]byte(rest[:idx]), &fm); err != nil {
 		return Entry{}, err
 	}
-	if fm.Strength < 1 {
-		fm.Strength = 1
-	}
 	return Entry{
-		ID:           id,
-		Body:         strings.TrimSpace(rest[idx+len("\n---\n"):]),
-		Tags:         fm.Tags,
-		Created:      fm.Created,
-		Strength:     fm.Strength,
-		LastAccessed: fm.LastAccessed,
+		ID:      id,
+		Body:    strings.TrimSpace(rest[idx+len("\n---\n"):]),
+		Tags:    fm.Tags,
+		Created: fm.Created,
+		Type:    memoryType(fm.Type),
 	}, nil
 }
 
@@ -174,7 +183,9 @@ func (s *Store) all() ([]Entry, error) {
 	return out, nil
 }
 
-// Recent returns the newest memories first. It does not reinforce.
+// Recent returns the newest context memories first, by created time.
+// Governance memories are excluded: they reach every session through the server
+// Instructions, not through on-demand recall.
 func (s *Store) Recent(limit int) ([]Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -183,11 +194,37 @@ func (s *Store) Recent(limit int) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].Created.After(all[j].Created) })
-	if limit > 0 && len(all) > limit {
-		all = all[:limit]
+	ctx := all[:0]
+	for _, e := range all {
+		if e.Type != "governance" {
+			ctx = append(ctx, e)
+		}
 	}
-	return all, nil
+	sort.Slice(ctx, func(i, j int) bool { return ctx[i].Created.After(ctx[j].Created) })
+	if limit > 0 && len(ctx) > limit {
+		ctx = ctx[:limit]
+	}
+	return ctx, nil
+}
+
+// Governance returns the governance memories, oldest first, for the server to
+// fold into its Instructions at session start.
+func (s *Store) Governance() ([]Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	all, err := s.all()
+	if err != nil {
+		return nil, err
+	}
+	var gov []Entry
+	for _, e := range all {
+		if e.Type == "governance" {
+			gov = append(gov, e)
+		}
+	}
+	sort.Slice(gov, func(i, j int) bool { return gov[i].Created.Before(gov[j].Created) })
+	return gov, nil
 }
 
 func (s *Store) Get(id string) (Entry, error) {
@@ -196,10 +233,12 @@ func (s *Store) Get(id string) (Entry, error) {
 	return s.read(id)
 }
 
-// Search ranks memories by keyword match weighted by recency, then reinforces
-// the returned ones. Score = matchCount * exp(-ageDays / strength), an
-// Ebbinghaus-style decay where each recall raises strength so frequently used
-// memories fade more slowly.
+// Search returns memories matching the query, ranked by a static, deterministic
+// signal so a read never modifies a file. A query token that exactly matches a
+// tag outranks one that only matches part of a tag, which outranks one found in
+// the body text; more matched tokens and then a newer Created break ties. Tags
+// rank above body text because they are the intended recall key, but body text
+// stays a fallback so auto-generated tag drift doesn't hide a memory.
 func (s *Store) Search(query string, limit int) ([]Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -209,40 +248,70 @@ func (s *Store) Search(query string, limit int) ([]Entry, error) {
 		return nil, err
 	}
 	tokens := strings.Fields(strings.ToLower(query))
-	now := time.Now().UTC()
 
+	const (
+		tierBody    = 1
+		tierPartial = 2
+		tierExact   = 3
+	)
 	type scored struct {
 		e     Entry
-		score float64
+		tier  int
+		count int
 	}
 	var hits []scored
 	for _, e := range all {
-		hay := strings.ToLower(e.Body + " " + strings.Join(e.Tags, " "))
-		match := 0
-		for _, t := range tokens {
-			match += strings.Count(hay, t)
+		if e.Type == "governance" {
+			continue // governance reaches sessions through the Instructions, not search
 		}
-		if match == 0 {
+		tags := make([]string, len(e.Tags))
+		for i, t := range e.Tags {
+			tags[i] = strings.ToLower(t)
+		}
+		body := strings.ToLower(e.Body)
+
+		tier, count := 0, 0
+		for _, tok := range tokens {
+			best := 0
+			for _, tag := range tags {
+				if tag == tok {
+					best = tierExact
+					break
+				}
+				if strings.Contains(tag, tok) && best < tierPartial {
+					best = tierPartial
+				}
+			}
+			if best == 0 && strings.Contains(body, tok) {
+				best = tierBody
+			}
+			if best > 0 {
+				count++
+				if best > tier {
+					tier = best
+				}
+			}
+		}
+		if tier == 0 {
 			continue
 		}
-		strength := float64(e.Strength)
-		if strength < 1 {
-			strength = 1
-		}
-		ageDays := now.Sub(e.Created).Hours() / 24
-		r := math.Exp(-ageDays / strength)
-		hits = append(hits, scored{e: e, score: float64(match) * r})
+		hits = append(hits, scored{e: e, tier: tier, count: count})
 	}
-	sort.Slice(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
+	sort.Slice(hits, func(i, j int) bool {
+		if hits[i].tier != hits[j].tier {
+			return hits[i].tier > hits[j].tier
+		}
+		if hits[i].count != hits[j].count {
+			return hits[i].count > hits[j].count
+		}
+		return hits[i].e.Created.After(hits[j].e.Created)
+	})
 	if limit > 0 && len(hits) > limit {
 		hits = hits[:limit]
 	}
 
 	out := make([]Entry, 0, len(hits))
 	for _, h := range hits {
-		h.e.Strength++
-		h.e.LastAccessed = now
-		_ = s.write(h.e) // reinforce; ignore write error so a read still returns
 		out = append(out, h.e)
 	}
 	return out, nil

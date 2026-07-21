@@ -33,7 +33,7 @@ if ($editorOk) {
 # Registration is not a user-facing change, so stay silent either way.
 try {
   if ((Test-GitRepo) -and !(Test-MergeDriverRegistered)) {
-    & git -C $target config merge.agent-parity-memory.name "agent-parity memory reinforcement merge" 2>$null
+    & git -C $target config merge.agent-parity-memory.name "agent-parity memory merge" 2>$null
     & git -C $target config merge.agent-parity-memory.driver $MergeDriverCmd 2>$null
   }
 } catch { }

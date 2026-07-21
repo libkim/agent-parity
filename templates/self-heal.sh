@@ -40,7 +40,7 @@ fi
 # and machines that only pull never run install -- re-register it here.
 # Registration is not a user-facing change, so stay silent either way.
 if in_git_repo && ! merge_driver_registered; then
-  git -C "$target" config merge.agent-parity-memory.name "agent-parity memory reinforcement merge" 2>/dev/null || true
+  git -C "$target" config merge.agent-parity-memory.name "agent-parity memory merge" 2>/dev/null || true
   git -C "$target" config merge.agent-parity-memory.driver "$MERGE_DRIVER_CMD" 2>/dev/null || true
 fi
 

@@ -97,6 +97,20 @@ Claude Code's pre-approval needs the exact project folder trusted. If only a
 parent directory is trusted, the trust dialog is skipped but the memory server
 still prompts for approval once ([claude-code#79612](https://github.com/anthropics/claude-code/issues/79612)).
 
+### Skills
+
+Installation writes three skills into the shared `.agents/skills/` source, so every
+agent sees the same ones:
+
+- `agent-parity` — runs the management commands below through the agent's own skill interface.
+- `write-requirement` — turns a request into a clear, testable requirement before work starts.
+- `write-governance` — writes a standing project rule worth folding into every session.
+
+The two authoring skills pair with the memory tools: each guides the writing, and
+its settled result is stored with `memory_add` (a requirement as context, a rule as
+governance). All three are regenerated on `update`; your own skills alongside them
+are left untouched.
+
 ### Commands
 
 agent-parity exposes these management commands as an `agent-parity` skill, so each agent can run
@@ -143,9 +157,9 @@ whether that session currently exposes the memory tools.
 | `claude wrapper` | `registered (CLAUDE.md)` / `missing` / `not registered` | Whether `CLAUDE.md` is the `@AGENTS.md` import wrapper; a pre-existing non-wrapper `CLAUDE.md` is preserved. |
 | `agent-specific diagnostics` | CLI found / not found, registration result | Extra checks offered by the installed agent CLI. These are not a check of the current agent session's tool visibility. |
 | `self-heal hooks` | `registered` / `missing` | Whether the managed hooks can retarget the memory launcher. Claude and Codex use `SessionStart`, Cursor uses `sessionStart`, and Antigravity uses `PreInvocation`. Codex requires the project hook to be reviewed and trusted. |
-| `skills` | `<n> in .agents/skills; sync script present` | Shared skill source and Claude sync script are installed. |
+| `skills` | `<n> in .agents/skills; sync script present` | Count of your own skills, plus the shared source and Claude sync script. |
 |  | `sync wiring missing` | The Claude skill-sync script is absent. |
-|  | `management skill: present` / `missing` | Whether the managed `agent-parity` skill is installed. |
+|  | `shipped skill <name>: present` / `missing` | Whether each managed skill (`agent-parity`, `write-requirement`, `write-governance`) is installed. |
 | `hook` | `registered` / `missing` | Whether Claude's session-start hook will sync skills into `.claude/skills`. |
 | `cursor cli` | `memory allowlist present` / `allowlist missing` | Whether `.cursor/cli.json` grants Cursor auto-approval for the memory tools. |
 | `AGENTS.md` | `memory block present` / `missing` | Whether the managed memory instruction block is present. |
@@ -215,16 +229,25 @@ before they run.
 
 ### Memory
 
-Each memory is a markdown file with `created`, `tags`, `strength`, and
-`lastAccessed` frontmatter. `memory_search` scores entries by
-`match × exp(-ageDays / strength)` and bumps `strength` on recall, so
-often-recalled memories keep ranking high while long-unused ones fall in the
-results.
+Each memory is a markdown file with `created` and `tags` frontmatter.
+`memory_recent` returns the newest by `created`; `memory_search` matches tags
+and body keywords and ranks a tag match above a body-text match. Ranking is
+static, so reading never rewrites a file.
 
-Recall bumps are state worth syncing, and when two machines recall the same
-memory before syncing, a bundled git merge driver combines them instead of
-raising a conflict: the higher `strength` and the newest `lastAccessed` win. A memory whose text was edited differently on both sides
-still conflicts, as it should.
+A memory has one of two types. **Context** (the default) is ordinary working
+memory, returned by `memory_recent` and `memory_search`. **Governance**
+(`memory_add` with `type: governance`) is a standing project rule: the server
+folds every governance memory into its startup instructions, so each session
+receives them automatically, and they are kept out of `memory_recent` and
+`memory_search` so they never crowd the working results. Keep governance small
+and curated, since it costs context in every session; a governance memory saved
+mid-session applies to the next session onward, and to the current one it is
+already in the conversation.
+
+A memory is normally created once under a unique id, so two machines rarely
+touch the same file. When they do (an explicit edit on both sides), a bundled
+git merge driver unions the tags and keeps the body if only one side changed
+it; a body edited differently on both sides conflicts, as it should.
 
 ### Skills
 
@@ -247,6 +270,8 @@ local.
 | `.agents/memory/` | the memory store: one markdown file per memory |
 | `.agents/skills/` | shared skills source (yours to fill) |
 | `.agents/skills/agent-parity/` | managed skill for running the management commands from any agent |
+| `.agents/skills/write-requirement/` | managed skill for turning a request into a testable requirement |
+| `.agents/skills/write-governance/` | managed skill for writing a standing project rule |
 | `.agents/bin/` | project-local launchers (`agent-parity`, `agent-parity.cmd`) |
 | `.agents/scripts/common.{sh,ps1}` | shared functions used by the local management commands |
 | `.agents/scripts/{status,version,uninstall}.{sh,ps1}` | separate project-local management commands |

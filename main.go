@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -26,13 +27,14 @@ var store *Store
 type AddInput struct {
 	Text string   `json:"text" jsonschema:"the memory to store: an intent, interest, recurring topic, or decision and its reason"`
 	Tags []string `json:"tags,omitempty" jsonschema:"optional tags"`
+	Type string   `json:"type,omitempty" jsonschema:"'governance' for a durable project rule that is delivered into every future session automatically; omit or 'context' for ordinary working memory recalled on demand"`
 }
 type AddOutput struct {
 	ID string `json:"id"`
 }
 
 func addHandler(ctx context.Context, req *mcp.CallToolRequest, in AddInput) (*mcp.CallToolResult, AddOutput, error) {
-	e, err := store.Add(in.Text, in.Tags)
+	e, err := store.Add(in.Text, in.Tags, in.Type)
 	if err != nil {
 		return nil, AddOutput{}, err
 	}
@@ -117,13 +119,31 @@ func main() {
 		log.Fatalf("init store: %v", err)
 	}
 
+	instructions := "Shared cross-agent memory that persists context across sessions and agents. " +
+		"These tools can load lazily, so they may be missing from your initial tool list even when the server is connected; confirm availability by calling memory_recent, not by trusting a static list. " +
+		"At the start of a session, call memory_recent to load prior context before acting. " +
+		"When the user reveals an intent, decision, or preference worth keeping, and when a task reaches a checkpoint or finishes, call memory_add with the fact and its reason. " +
+		"Call memory_add with type 'governance' only for a durable project rule that must hold in every future session; those are delivered below automatically and are not returned by recent or search. Everything else is ordinary context. " +
+		"When a past topic or decision becomes relevant, call memory_search before acting. " +
+		"Store durable context, not secrets, one-off chatter, or facts another source already enforces. " +
+		"Memories are saved as plaintext and committed to the repo, which may be shared or public, so never store credentials, tokens, keys, or other sensitive data."
+
+	// Governance memories are the project's standing rules. Fold them into the
+	// Instructions so every session receives them at initialize, without an
+	// agent having to recall them.
+	if gov, gerr := store.Governance(); gerr == nil && len(gov) > 0 {
+		var b strings.Builder
+		b.WriteString(instructions)
+		b.WriteString("\n\nProject governance (standing rules for this project; follow them):")
+		for _, g := range gov {
+			b.WriteString("\n- ")
+			b.WriteString(g.Body)
+		}
+		instructions = b.String()
+	}
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "cross-agent-memory", Version: version}, &mcp.ServerOptions{
-		Instructions: "Shared cross-agent memory that persists context across sessions and agents. " +
-			"At the start of a session, call memory_recent to load prior context before acting. " +
-			"When the user reveals an intent, decision, or preference worth keeping — and when a task reaches a checkpoint or finishes — call memory_add with the fact and its reason. " +
-			"When a past topic or decision becomes relevant, call memory_search before acting. " +
-			"Store durable context, not secrets, one-off chatter, or facts another source already enforces. " +
-			"Memories are saved as plaintext and committed to the repo, which may be shared or public, so never store credentials, tokens, keys, or other sensitive data.",
+		Instructions: instructions,
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_add",
@@ -131,7 +151,7 @@ func main() {
 	}, addHandler)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_search",
-		Description: "Search memories by keywords, ranked by relevance and recency (recall reinforces them so they fade more slowly). Call this before acting when a past topic, decision, or preference may be relevant.",
+		Description: "Search memories by tag and body keywords, ranking a tag match above a body-text match; reading never changes them. Call this before acting when a past topic, decision, or preference may be relevant.",
 	}, searchHandler)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_recent",

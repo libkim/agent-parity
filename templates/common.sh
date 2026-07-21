@@ -301,10 +301,12 @@ uninstall_skills() {
     [ -e "$TARGET/$f" ] || continue
     "$CONFIG_EDITOR" unmerge-claude-settings "$TARGET/$f" >/dev/null
   done
-  # The agent-parity skill is our wiring, not a user skill, so remove both the
+  # The skills we ship are our wiring, not user skills, so remove both the
   # source and Claude's synced copy before deciding whether a static copy of
   # real user skills is worth keeping below.
-  rm -rf "$TARGET/.agents/skills/agent-parity" "$TARGET/.claude/skills/agent-parity"
+  for sk in agent-parity write-requirement write-governance; do
+    rm -rf "$TARGET/.agents/skills/$sk" "$TARGET/.claude/skills/$sk"
+  done
   if [ -n "$(ls -A "$TARGET/.claude/skills" 2>/dev/null | grep -v '^\.gitkeep$')" ]; then
     # Claude Code reads only this copy, so removing it with the wiring would
     # take Claude's skills away while every other agent keeps the source.
@@ -339,13 +341,15 @@ status_skills() {
     echo "skills: sync wiring missing"
     return 0
   fi
-  n=$(ls "$TARGET/.agents/skills" 2>/dev/null | grep -cvE '^(\.gitkeep|agent-parity)$' || true)
+  n=$(ls "$TARGET/.agents/skills" 2>/dev/null | grep -cvE '^(\.gitkeep|agent-parity|write-requirement|write-governance)$' || true)
   echo "skills: $n in .agents/skills; sync script present"
-  if [ -e "$TARGET/.agents/skills/agent-parity/SKILL.md" ]; then
-    echo "  management skill: present"
-  else
-    echo "  management skill: missing"
-  fi
+  for sk in agent-parity write-requirement write-governance; do
+    if [ -e "$TARGET/.agents/skills/$sk/SKILL.md" ]; then
+      echo "  shipped skill $sk: present"
+    else
+      echo "  shipped skill $sk: missing"
+    fi
+  done
   CONFIG_EDITOR=$(local_config_editor_path) || CONFIG_EDITOR=""
   if [ -x "$CONFIG_EDITOR" ] && "$CONFIG_EDITOR" has-sync-hook "$TARGET/$CLAUDE_SRC" "$CLAUDE_HOOK" 2>/dev/null; then
     echo "  hook: registered ($CLAUDE_SRC)"

@@ -21,9 +21,9 @@ MARK_BEGIN="<!-- agent-parity:begin -->"
 MARK_END="<!-- agent-parity:end -->"
 GI_BEGIN="# agent-parity:begin"
 GI_END="# agent-parity:end"
-# Reinforcement frontmatter merges mechanically (each recall is an increment),
-# so a bundled git merge driver resolves concurrent-recall conflicts instead
-# of leaving strength/lastAccessed markers to the user.
+# Memory files rarely change after creation, but an explicit edit on both
+# sides can conflict; a bundled git merge driver unions tags and resolves a
+# one-sided body edit instead of leaving conflict markers to the user.
 MERGE_DRIVER_CMD='.agents/scripts/merge-memory.sh %O %A %B'
 GA_LINE=".agents/memory/*.md merge=agent-parity-memory"
 # Everything install may create at the target's top level. gitignore syncing
@@ -382,7 +382,7 @@ sync_gitattributes() {
 # committed session hooks re-register it on machines that only pull.
 reg_merge_driver() {
   in_git_repo || return 0
-  git -C "$TARGET" config merge.agent-parity-memory.name "agent-parity memory reinforcement merge"
+  git -C "$TARGET" config merge.agent-parity-memory.name "agent-parity memory merge"
   git -C "$TARGET" config merge.agent-parity-memory.driver "$MERGE_DRIVER_CMD"
   echo "git: memory merge driver registered (.git/config)"
 }
