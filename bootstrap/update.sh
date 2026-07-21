@@ -583,6 +583,9 @@ cmd_update() {
   else
     echo "updated: $old -> $new"
   fi
+  # update re-applies the server, skills, and registrations every run, and a
+  # running session loads those only at startup, so always point at a restart.
+  echo "start a new agent session (or restart) to load the updated setup."
 }
 
 

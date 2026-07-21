@@ -570,7 +570,14 @@ function Cmd-Update {
   Remove-Tombstones
   Clear-VersionCache
   $new = Installed-Version
-  if ($old -eq $new) { Write-Output "already up to date: $new" } else { Write-Output "updated: $old -> $new" }
+  if ($old -eq $new) {
+    Write-Output "already up to date: $new"
+  } else {
+    Write-Output "updated: $old -> $new"
+  }
+  # update re-applies the server, skills, and registrations every run, and a
+  # running session loads those only at startup, so always point at a restart.
+  Write-Output "start a new agent session (or restart) to load the updated setup."
 }
 
 
