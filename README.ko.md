@@ -59,7 +59,7 @@ PowerShell (Windows):
 irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 | iex
 ```
 
-설치나 `update` 후에는 새 에이전트 세션을 시작(또는 재시작)해야 에이전트가 메모리 서버·스킬·지침을 불러옵니다. 실행 중인 세션은 이것들을 시작 시점에만 읽으므로, 재시작 전까지는 이전 설정으로 계속 동작합니다. 그동안 고장 나는 것은 없습니다.
+설치·`update`는 새 세션부터 반영됩니다. 실행 중인 세션은 재시작 전까지 이전 설정으로 정상 동작합니다.
 
 ### 기존 설정이 있는 프로젝트에 도입하기
 

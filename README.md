@@ -65,10 +65,8 @@ PowerShell (Windows):
 irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 | iex
 ```
 
-After an install or an `update`, start a new agent session (or restart) so the
-agent loads the memory server, skills, and instructions. A running session picks
-these up only at startup; until you restart it keeps using the previous setup,
-so nothing breaks in the meantime.
+An install or `update` takes effect from the next session. A running session
+keeps using the previous setup and works normally until you restart it.
 
 ### Adopting an existing setup
 
