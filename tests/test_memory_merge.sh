@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
-# The bundled git merge driver resolves concurrent memory reinforcement
-# (strength/lastAccessed/tags) without conflict markers, and still surfaces a
-# real conflict when both sides changed the body.
+# The bundled git merge driver unions tags across concurrent memory edits
+# without conflict markers, drops the retired strength/lastAccessed fields, and
+# still surfaces a real conflict when both sides changed the body.
 set -eu
 
 version=${1:-v9.8.7}
@@ -60,11 +60,13 @@ write_mem 5 "    - a" "2026-07-03T00:00:00Z" "shared body"
 git -C "$root" commit -qam "main recall"
 
 git -C "$root" merge -q --no-edit side
-# base 3, main 5, side 4 -> the higher side wins.
-grep -q '^strength: 5$' "$mem"
+# tags union across sides and the body is unchanged; the retired strength and
+# lastAccessed fields are dropped from the output, not merged.
+grep -q -- '- a' "$mem"
 grep -q -- '- b' "$mem"
-grep -q '^lastAccessed: 2026-07-04' "$mem"
 grep -q '^shared body$' "$mem"
+if grep -q '^strength:' "$mem"; then echo "strength not dropped from merge output" >&2; exit 1; fi
+if grep -q '^lastAccessed:' "$mem"; then echo "lastAccessed not dropped from merge output" >&2; exit 1; fi
 
 # Bodies edited to different content on both sides must still conflict.
 mem2="$root/.agents/memory/200.md"
