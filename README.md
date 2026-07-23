@@ -9,6 +9,13 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.gif">
+    <img src="assets/demo-light.gif" alt="One environment, every agent — memory and skills added in one agent are committed to the repo and shared across Claude Code, Codex, Cursor, and Antigravity" width="820">
+  </picture>
+</p>
+
 Every coding agent keeps its own memory, skills, and instruction files, so
 switching agents, or sharing a repo with teammates, means each one behaves
 differently and has to be set up again. agent-parity fixes that by making the shared environment (memory, skills,

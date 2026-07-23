@@ -9,6 +9,13 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.gif">
+    <img src="assets/demo-light.gif" alt="하나의 환경, 모든 에이전트 — 한 에이전트에 추가한 메모리와 스킬이 저장소에 커밋되어 Claude Code·Codex·Cursor·Antigravity가 공유합니다" width="820">
+  </picture>
+</p>
+
 코딩 에이전트는 저마다 메모리, 스킬, 지침 파일을 따로 둡니다. 그래서 에이전트를 바꾸거나 팀과 저장소를 공유하면 동작이 제각각이고 매번 다시 설정해야 합니다. agent-parity는 이 공유 환경(메모리·스킬·지침)을 저장소에 커밋하는 **코드형 환경(Environment as Code)** 으로 정의해 이 문제를 해결합니다. 한 번 설치하면 Claude Code, Codex, Cursor, Antigravity가 같은 메모리를 공유하고 같은 스킬과 지침(`AGENTS.md`)을 읽습니다.
 
 ## 특징
