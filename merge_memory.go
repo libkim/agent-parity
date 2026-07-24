@@ -68,11 +68,20 @@ func mergeMemoryFiles(basePath, oursPath, theirsPath string) error {
 		merged.Created = theirs.Created
 	}
 	merged.Tags = mergeTags(base.Tags, ours.Tags, theirs.Tags)
+	// Governance is the escalated type; keep it whenever either side carries it
+	// so a cross-machine merge never silently demotes a standing rule to context
+	// (parseEntry canonicalizes the other value to "context").
+	if ours.Type == "governance" || theirs.Type == "governance" {
+		merged.Type = "governance"
+	}
 
-	y, err := yaml.Marshal(frontmatter{
-		Created: merged.Created,
-		Tags:    merged.Tags,
-	})
+	// Mirror the server's writer (store.go write): emit type only for
+	// governance, so context memories and pre-type files stay byte-identical.
+	fm := frontmatter{Created: merged.Created, Tags: merged.Tags}
+	if merged.Type == "governance" {
+		fm.Type = "governance"
+	}
+	y, err := yaml.Marshal(fm)
 	if err != nil {
 		return err
 	}
