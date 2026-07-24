@@ -1,11 +1,8 @@
-# agent-parity
-
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png">
-    <img src="assets/logo.png" alt="agent-parity" width="360">
-  </picture>
+  <img src="assets/app-icon.png" alt="agent-parity" width="128">
 </p>
+
+<h1 align="center">agent-parity</h1>
 
 <p align="center"><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
 
