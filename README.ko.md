@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/app-icon.png" alt="agent-parity" width="128">
+  <img src="assets/app-icon.png" alt="agent-parity" width="360">
 </p>
 
 <h1 align="center">agent-parity</h1>
