@@ -429,10 +429,10 @@ sync_gitignore() {
       return 0
       ;;
   esac
-  # Legacy installs may still have a vendored dist directory. Keep it out of
-  # Git even if an interrupted migration leaves files behind.
-  rules="/.agents/mcp/memory/dist/
-"
+  # This block carries un-ignore rules only. A consumer project never builds the
+  # memory server, so dist/ never legitimately appears here; a legacy committed
+  # dist/ is removed by the tombstone sweep, not hidden by a positive ignore.
+  rules=""
   for p in $(ignored_artifacts); do
     if [ -d "$TARGET/$p" ]; then rules="$rules!/$p/
 "; else rules="$rules!/$p

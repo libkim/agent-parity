@@ -459,9 +459,9 @@ function Sync-GitIgnore {
     return
   }
   $rules = New-Object System.Collections.Generic.List[string]
-  # Legacy installs may still have a vendored dist directory. Keep it out of
-  # Git even if an interrupted migration leaves files behind.
-  $rules.Add("/.agents/mcp/memory/dist/")
+  # This block carries un-ignore rules only. A consumer project never builds the
+  # memory server, so dist/ never legitimately appears here; a legacy committed
+  # dist/ is removed by the tombstone sweep, not hidden by a positive ignore.
   foreach ($p in $Artifacts) {
     if ((Test-Path -LiteralPath (Path-InTarget $p)) -and (Test-Ignored $p)) {
       if (Test-Path -LiteralPath (Path-InTarget $p) -PathType Container) { $rules.Add("!/$p/") } else { $rules.Add("!/$p") }
