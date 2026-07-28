@@ -412,25 +412,56 @@ reg_merge_driver() {
 }
 
 # .git/hooks is never carried by git, so install (and self-heal on a fresh
-# clone) drops in a thin pre-push shim that runs the tracked guard script. We own
-# it only when our marker is present, so a user's own hook is left untouched.
+# clone) owns the pre-push entry point -- git runs a file named exactly
+# "pre-push", so that name is fixed and ours is the dispatcher. A pre-existing
+# user hook is renamed to pre-push.user and chained from the dispatcher, so both
+# the user's checks and our guard run. Everything but the fixed entry name lives
+# under our namespace (.user suffix, the tracked guard in .agents).
 pre_push_hook_path() {
   hp=$(git -C "$TARGET" rev-parse --git-path hooks 2>/dev/null) || return 1
   case "$hp" in /*) echo "$hp/pre-push" ;; *) echo "$TARGET/$hp/pre-push" ;; esac
 }
 
+# When core.hooksPath is set (husky and similar tools own the hook dir and
+# regenerate it), we do not touch that directory: injecting there fights the
+# tool's own management. The user wires our guard in themselves, same as any
+# other pre-existing hook-manager conflict install already reports.
+uses_custom_hooks_path() {
+  git -C "$TARGET" config --get core.hooksPath >/dev/null 2>&1
+}
+
 reg_pre_push_hook() {
   in_git_repo || return 0
+  if uses_custom_hooks_path; then
+    echo "git: core.hooksPath is set (a hook manager owns your hooks) -- add '.agents/scripts/pre-push.sh \"\$@\"' to your pre-push hook to guard managed files"
+    return 0
+  fi
   hook=$(pre_push_hook_path) || return 0
   if [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null; then
-    echo "git: left your existing pre-push hook in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
-    return 0
+    # A real user hook is at the entry point. Preserve it as pre-push.user so the
+    # dispatcher can chain it; never overwrite the user's script.
+    if [ -e "$hook.user" ]; then
+      echo "git: left your existing pre-push hook in place ($hook.user already exists) -- merge it and call .agents/scripts/pre-push.sh"
+      return 0
+    fi
+    mv "$hook" "$hook.user"
+    chmod +x "$hook.user" 2>/dev/null || true
+    echo "git: preserved your pre-push hook as pre-push.user (chained from the agent-parity dispatcher)"
   fi
   mkdir -p "$(dirname "$hook")"
   cat > "$hook" <<EOF
 #!/bin/sh
 $PRE_PUSH_MARKER
-exec "\$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh" "\$@"
+# Dispatch pre-push to every sub-hook with the same stdin (git passes the pushed
+# refs on stdin), and fail the push if any sub-hook fails.
+top=\$(git rev-parse --show-toplevel)
+input=\$(cat)
+status=0
+for sub in "\$top/.agents/scripts/pre-push.sh" "\$0.user"; do
+  [ -x "\$sub" ] || continue
+  printf '%s' "\$input" | "\$sub" "\$@" || status=1
+done
+exit \$status
 EOF
   chmod +x "$hook"
   echo "git: pre-push guard registered (.git/hooks/pre-push)"

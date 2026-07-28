@@ -269,6 +269,9 @@ it; a body edited differently on both sides conflicts, as it should.
 Cross-machine sharing only works if these files are committed, so a bundled
 pre-push hook refuses a push while any managed file — a new memory or a wiring
 change — is uncommitted. Commit every listed managed change before pushing again.
+An existing `pre-push` hook is preserved as `pre-push.user` and chained from the
+dispatcher. If a hook manager owns your hooks through `core.hooksPath` (for
+example husky), wire the guard in yourself by calling `.agents/scripts/pre-push.sh "$@"` from your hook.
 
 ### Skills
 
