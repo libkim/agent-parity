@@ -284,20 +284,33 @@ function Test-PrePushHookRegistered {
   return ($hook -and (Test-Path -LiteralPath $hook) -and ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*"))
 }
 
-function Test-PrePushHookForeign {
-  $hook = Get-PrePushHookPath
-  return ($hook -and (Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*"))
+function Test-CustomHooksPath {
+  & git -C $Target config --get core.hooksPath *> $null
+  return ($LASTEXITCODE -eq 0)
 }
 
-# Write our shim only when there is no hook, or the existing one is ours; a
-# user's own pre-push hook is left untouched. Write-Text keeps the LF newlines
-# git needs to run the hook.
+# Self-heal path: re-establish the dispatcher on a fresh clone (.git/hooks is
+# never carried by git). Silent and non-invasive -- writes only when the entry
+# point is empty or already ours, and never moves a user's own hook. Absorbing a
+# pre-existing hook (rename to pre-push.user) is done only by explicit
+# install/update. Write-Text keeps the LF newlines git needs to run the hook.
 function Register-PrePushHook {
   if (!(Test-GitRepo)) { return }
+  if (Test-CustomHooksPath) { return }
   $hook = Get-PrePushHookPath
   if (!$hook) { return }
-  if (Test-PrePushHookForeign) { return }
-  $body = "#!/bin/sh`n" + $PrePushMarker + "`nexec `"`$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh`" `"`$@`"`n"
+  if ((Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*")) {
+    return
+  }
+  $body = "#!/bin/sh`n" + $PrePushMarker + "`n" +
+    "top=`$(git rev-parse --show-toplevel)`n" +
+    "input=`$(cat)`n" +
+    "status=0`n" +
+    "for sub in `"`$top/.agents/scripts/pre-push.sh`" `"`$0.user`"; do`n" +
+    "  [ -x `"`$sub`" ] || continue`n" +
+    "  printf '%s' `"`$input`" | `"`$sub`" `"`$@`" || status=1`n" +
+    "done`n" +
+    "exit `$status`n"
   Write-Text $hook $body
 }
 

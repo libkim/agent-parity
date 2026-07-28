@@ -62,8 +62,8 @@ if in_git_repo; then
   fi
   if pre_push_hook_registered; then
     echo "  pre-push guard: registered (.git/hooks/pre-push)"
-  elif pre_push_hook_foreign; then
-    echo "  pre-push guard: your own pre-push hook is in place (not replaced)"
+  elif uses_custom_hooks_path; then
+    echo "  pre-push guard: core.hooksPath is set -- wire .agents/scripts/pre-push.sh into your hook manager"
   else
     echo "  pre-push guard: missing (a session-start hook registers it)"
   fi

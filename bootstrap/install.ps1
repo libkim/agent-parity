@@ -485,15 +485,37 @@ function Get-PrePushHookPath {
   return (Join-Path $dir "pre-push")
 }
 
+function Test-CustomHooksPath {
+  & git -C $Target config --get core.hooksPath *> $null
+  return ($LASTEXITCODE -eq 0)
+}
+
 function Reg-PrePushHook {
   if (!(Test-GitRepo)) { return }
+  if (Test-CustomHooksPath) {
+    Write-Output "git: core.hooksPath is set (a hook manager owns your hooks) -- add '.agents/scripts/pre-push.sh `"`$@`"' to your pre-push hook to guard managed files"
+    return
+  }
   $hook = Get-PrePushHookPath
   if (!$hook) { return }
   if ((Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*")) {
-    Write-Output "git: left your existing pre-push hook in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
-    return
+    # Preserve the user's hook as pre-push.user so the dispatcher can chain it.
+    if (Test-Path -LiteralPath "$hook.user") {
+      Write-Output "git: left your existing pre-push hook in place ($hook.user already exists) -- merge it and call .agents/scripts/pre-push.sh"
+      return
+    }
+    Move-Item -LiteralPath $hook -Destination "$hook.user" -Force
+    Write-Output "git: preserved your pre-push hook as pre-push.user (chained from the agent-parity dispatcher)"
   }
-  $body = "#!/bin/sh`n" + $PrePushMarker + "`nexec `"`$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh`" `"`$@`"`n"
+  $body = "#!/bin/sh`n" + $PrePushMarker + "`n" +
+    "top=`$(git rev-parse --show-toplevel)`n" +
+    "input=`$(cat)`n" +
+    "status=0`n" +
+    "for sub in `"`$top/.agents/scripts/pre-push.sh`" `"`$0.user`"; do`n" +
+    "  [ -x `"`$sub`" ] || continue`n" +
+    "  printf '%s' `"`$input`" | `"`$sub`" `"`$@`" || status=1`n" +
+    "done`n" +
+    "exit `$status`n"
   Write-Text $hook $body
   Write-Output "git: pre-push guard registered (.git/hooks/pre-push)"
 }

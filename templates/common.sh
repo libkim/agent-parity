@@ -302,22 +302,38 @@ pre_push_hook_registered() {
   [ -e "$hook" ] && grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null
 }
 
-pre_push_hook_foreign() {
-  hook=$(pre_push_hook_path) || return 1
-  [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null
+# True when a hook manager (husky and similar) owns the hook dir through
+# core.hooksPath; agent-parity does not inject there and the user wires the
+# guard in themselves.
+uses_custom_hooks_path() {
+  git -C "$TARGET" config --get core.hooksPath >/dev/null 2>&1
 }
 
-# Write our shim only when there is no hook, or the existing one is ours; a
-# user's own pre-push hook is left untouched.
+# Self-heal path: re-establish the dispatcher on a fresh clone (.git/hooks is
+# never carried by git). Silent and non-invasive -- it only writes when the
+# entry point is empty or already ours, and never moves a user's own hook.
+# Absorbing a pre-existing hook (rename to pre-push.user) is done only by the
+# explicit install/update, not here. If the entry point holds a foreign hook,
+# or a hook manager owns the dir via core.hooksPath, we leave it alone.
 reg_pre_push_hook() {
   in_git_repo || return 0
+  ! uses_custom_hooks_path || return 0
   hook=$(pre_push_hook_path) || return 0
-  ! pre_push_hook_foreign || return 0
+  if [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null; then
+    return 0
+  fi
   mkdir -p "$(dirname "$hook")"
   cat > "$hook" <<EOF
 #!/bin/sh
 $PRE_PUSH_MARKER
-exec "\$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh" "\$@"
+top=\$(git rev-parse --show-toplevel)
+input=\$(cat)
+status=0
+for sub in "\$top/.agents/scripts/pre-push.sh" "\$0.user"; do
+  [ -x "\$sub" ] || continue
+  printf '%s' "\$input" | "\$sub" "\$@" || status=1
+done
+exit \$status
 EOF
   chmod +x "$hook"
 }

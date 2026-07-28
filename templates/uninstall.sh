@@ -53,9 +53,15 @@ elif [ "$ga_state" = invalid ]; then
 fi
 if in_git_repo; then
   git -C "$TARGET" config --remove-section merge.agent-parity-memory 2>/dev/null || true
-  # Remove the pre-push shim only when it is ours; a user's own hook stays.
+  # Remove the pre-push dispatcher only when it is ours; a user's own hook stays.
+  # If we had preserved their hook as pre-push.user, restore it to the entry point.
   if pre_push_hook_registered; then
-    rm -f "$(pre_push_hook_path)"
+    hook=$(pre_push_hook_path)
+    rm -f "$hook"
+    if [ -e "$hook.user" ]; then
+      mv "$hook.user" "$hook"
+      echo "git: restored your original pre-push hook"
+    fi
   fi
 fi
 gi="$TARGET/.gitignore"

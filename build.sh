@@ -29,7 +29,7 @@ for t in $TARGETS; do
     go build -buildvcs=false -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
     -o "${OUT}/${APP}-${os}-${arch}${ext}" .
   CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-    go build -tags configeditor -buildvcs=false -trimpath -ldflags="-s -w" \
+    go build -tags configeditor -buildvcs=false -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
     -o "${OUT}/agent-parity-config-${os}-${arch}${ext}" .
 done
 

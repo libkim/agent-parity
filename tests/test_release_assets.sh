@@ -35,6 +35,7 @@ grep -qxF "PACKAGED_VERSION=\"$version\"" "$dist/update.sh"
 grep -qxF "\$PackagedVersion = \"$version\"" "$dist/install.ps1"
 grep -qxF "\$PackagedVersion = \"$version\"" "$dist/update.ps1"
 [ "$("$dist/$server_asset" -version)" = "$version" ]
+[ "$("$dist/$editor_asset" -version)" = "$version" ]
 
 unix_command='curl -fsSL https://github.com/libkim/agent-parity/releases/latest/download/install.sh | sh'
 windows_command='irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 | iex'

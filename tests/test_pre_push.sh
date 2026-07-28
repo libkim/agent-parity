@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
-# The pre-push guard is installed as a .git/hooks/pre-push shim, blocks while
-# managed files are uncommitted, passes once they are committed, is removed by
-# uninstall, and never replaces a user's own pre-push hook.
+# The pre-push guard is installed as a .git/hooks/pre-push dispatcher: it blocks
+# while managed files are uncommitted, passes once they are committed, preserves
+# and chains a user's own hook as pre-push.user, restores it on uninstall, and
+# defers entirely when a hook manager owns the dir via core.hooksPath.
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -58,14 +59,40 @@ rm -f "$root/.agents/memory/9999.md"
 AGENT_PARITY_CONFIG_EDITOR="$repo/dist/$editor_asset" sh "$root/.agents/scripts/uninstall.sh" >/dev/null 2>&1
 [ ! -e "$hook" ] || { echo "uninstall left the hook behind" >&2; exit 1; }
 
-# A user's own pre-push hook is never replaced.
+# A user's own pre-push hook is preserved as pre-push.user and chained from the
+# dispatcher, so both the user's checks and our guard run.
 git -C "$root2" init -q
 mkdir -p "$root2/.git/hooks"
-printf '#!/bin/sh\necho MINE\n' > "$root2/.git/hooks/pre-push"
+printf '#!/bin/sh\ncat >/dev/null\necho MINE-RAN\n' > "$root2/.git/hooks/pre-push"
 chmod +x "$root2/.git/hooks/pre-push"
 install_into "$root2" > "$root2/out" 2>&1 || { cat "$root2/out" >&2; exit 1; }
-grep -q MINE "$root2/.git/hooks/pre-push" || { echo "install clobbered a user's pre-push hook" >&2; exit 1; }
-grep -qF "agent-parity managed pre-push hook" "$root2/.git/hooks/pre-push" && { echo "install overwrote the user hook with ours" >&2; exit 1; }
-grep -q "left your existing pre-push hook" "$root2/out" || { echo "install did not warn about the existing hook" >&2; exit 1; }
+hook2="$root2/.git/hooks/pre-push"
+grep -qF "agent-parity managed pre-push hook" "$hook2" || { echo "install did not install the dispatcher" >&2; exit 1; }
+[ -x "$hook2.user" ] || { echo "install did not preserve the user hook as pre-push.user" >&2; exit 1; }
+grep -q MINE-RAN "$hook2.user" || { echo "pre-push.user is not the original user hook" >&2; exit 1; }
+grep -q "preserved your pre-push hook as pre-push.user" "$root2/out" || { echo "install did not report preserving the user hook" >&2; exit 1; }
+# Commit managed files so our guard passes, then the dispatcher must still run
+# the chained user hook.
+git -C "$root2" add -A
+git -C "$root2" -c user.email=t@e -c user.name=t commit -qm install
+chain_output=$(cd "$root2" && ./.git/hooks/pre-push origin file:///dev/null </dev/null 2>&1) || {
+  echo "dispatcher failed on a clean tree" >&2; printf '%s\n' "$chain_output" >&2; exit 1; }
+printf '%s\n' "$chain_output" | grep -q MINE-RAN || { echo "dispatcher did not run the chained user hook" >&2; exit 1; }
+# uninstall restores the user's original hook to the entry point.
+AGENT_PARITY_CONFIG_EDITOR="$repo/dist/$editor_asset" sh "$root2/.agents/scripts/uninstall.sh" >/dev/null 2>&1
+grep -q MINE-RAN "$hook2" || { echo "uninstall did not restore the user's original pre-push hook" >&2; exit 1; }
+[ ! -e "$hook2.user" ] || { echo "uninstall left pre-push.user behind" >&2; exit 1; }
 
-echo "pre-push guard installs, blocks, uninstalls, and spares a user hook: OK"
+# When core.hooksPath is set (a hook manager owns the dir), install does not
+# touch it and reports how to wire the guard in.
+root3=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-prepush3.XXXXXX")
+git -C "$root3" init -q
+mkdir -p "$root3/.husky"
+git -C "$root3" config core.hooksPath .husky
+install_into "$root3" > "$root3/out" 2>&1 || { cat "$root3/out" >&2; exit 1; }
+[ ! -e "$root3/.git/hooks/pre-push" ] || { echo "install wrote into .git/hooks despite core.hooksPath" >&2; exit 1; }
+[ -z "$(ls -A "$root3/.husky" 2>/dev/null)" ] || { echo "install wrote into the hook manager's dir" >&2; exit 1; }
+grep -q "core.hooksPath is set" "$root3/out" || { echo "install did not report the core.hooksPath case" >&2; exit 1; }
+rm -rf "$root3"
+
+echo "pre-push guard installs, blocks, chains a user hook, restores on uninstall, and defers to core.hooksPath: OK"

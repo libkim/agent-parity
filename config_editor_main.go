@@ -7,12 +7,20 @@ import (
 	"os"
 )
 
+// version is stamped at build time via -ldflags "-X main.version=...", matching
+// the memory-mcp build so a release asset can self-report its tag.
+var version = "dev"
+
 func configEditorUsage() {
 	fmt.Fprintln(os.Stderr, "usage: agent-parity-config <ensure|command|has|has-memory-config|merge-hook|merge-claude-settings|merge-cursor-cli|merge-memory|has-sync-hook|has-claude-settings|has-agent-hook|has-cursor-cli|unmerge|unmerge-hook|unmerge-claude-settings|unmerge-cursor-cli> <config> [value]")
 	os.Exit(2)
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "-version" {
+		fmt.Println(version)
+		return
+	}
 	if len(os.Args) < 3 {
 		configEditorUsage()
 	}

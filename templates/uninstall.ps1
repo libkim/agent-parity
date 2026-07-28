@@ -46,8 +46,16 @@ if ($gaState -eq "valid") {
 }
 if (Test-GitRepo) {
   & git -C $Target config --remove-section merge.agent-parity-memory 2>$null
-  # Remove the pre-push shim only when it is ours; a user's own hook stays.
-  if (Test-PrePushHookRegistered) { Remove-Item -LiteralPath (Get-PrePushHookPath) -Force -ErrorAction SilentlyContinue }
+  # Remove the pre-push dispatcher only when it is ours; a user's own hook stays.
+  # If we had preserved their hook as pre-push.user, restore it to the entry point.
+  if (Test-PrePushHookRegistered) {
+    $hook = Get-PrePushHookPath
+    Remove-Item -LiteralPath $hook -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath "$hook.user") {
+      Move-Item -LiteralPath "$hook.user" -Destination $hook -Force
+      Write-Output "git: restored your original pre-push hook"
+    }
+  }
 }
 $gitIgnoreText = Read-Text (Path-InTarget ".gitignore")
 $gitIgnoreState = Get-ManagedBlockState $gitIgnoreText $GitIgnoreBegin $GitIgnoreEnd
