@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "sh -c 'root=$(git rev-parse --show-toplevel) \u0026\u0026 exec \"$root/.agents/bin/agent-parity\" self-heal'",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"\u0026 (Join-Path (git rev-parse --show-toplevel) '.agents/bin/agent-parity.cmd') self-heal\"",
+            "statusMessage": "Checking agent-parity MCP wiring",
+            "timeout": 30,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

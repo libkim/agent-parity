@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": ".agents/bin/agent-parity self-heal",
+        "timeout": 30
+      }
+    ]
+  },
+  "version": 1
+}

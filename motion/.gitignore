@@ -1,0 +1,12 @@
+# generated / derived — only source is tracked
+node_modules/
+package.json
+package-lock.json
+sceneB2.html
+sceneB2_icon.html
+captureB2_icon.mjs
+app-icon.png
+app-icon-video.png
+frB_*/
+frI_*/
+*.png

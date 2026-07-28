@@ -1,0 +1,168 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{ /* dark — shadcn zinc */
+    --bg:#09090b; --bg2:#0d0d11; --card:#141418; --card-fg:#fafafa;
+    --muted:#a1a1aa; --border:#27272a; --border-strong:#3f3f46;
+    --accent:#818cf8; --accent-soft:rgba(129,140,248,.14);
+    --ok:#4ade80; --grid:rgba(255,255,255,.032);
+    --shadow:0 1px 0 rgba(255,255,255,.04),0 14px 36px rgba(0,0,0,.5);
+  }
+  body.light{
+    --bg:#fbfbfd; --bg2:#f3f3f6; --card:#ffffff; --card-fg:#09090b;
+    --muted:#71717a; --border:#e4e4e7; --border-strong:#d4d4d8;
+    --accent:#6366f1; --accent-soft:rgba(99,102,241,.10);
+    --ok:#16a34a; --grid:rgba(9,9,11,.04);
+    --shadow:0 1px 2px rgba(16,24,40,.05),0 14px 32px rgba(16,24,40,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1000px;height:560px;overflow:hidden}
+  body{background:radial-gradient(130% 130% at 50% -20%,var(--bg2),var(--bg));
+    font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:var(--card-fg);-webkit-font-smoothing:antialiased}
+  .stage{position:relative;width:1000px;height:560px;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:38px 38px}
+  .mono{font-family:'Geist Mono',ui-monospace,monospace}
+
+  .caps{position:absolute;top:52px;left:0;right:0;text-align:center;height:24px}
+  .cap{position:absolute;left:0;right:0;top:0;font-size:16px;font-weight:500;color:var(--muted);opacity:0}
+  .cap b{color:var(--card-fg);font-weight:600}
+
+  #system{position:absolute;inset:0}
+  .agents{position:absolute;top:116px;left:64px;right:64px;display:flex;gap:22px;justify-content:center}
+  .card{flex:1;max-width:196px;background:var(--card);border:1px solid var(--border);
+    border-radius:14px;padding:15px;box-shadow:var(--shadow);opacity:0;will-change:transform,opacity}
+  .chead{display:flex;align-items:center;gap:9px}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .cname{font-size:14px;font-weight:600;letter-spacing:-.01em}
+  .slotwrap{position:relative;height:36px;margin-top:13px}
+  .slot{position:absolute;inset:0;border-radius:10px;display:flex;align-items:center;gap:8px;padding:0 11px;font-size:12px}
+  .slot.empty{border:1px dashed var(--border-strong);color:var(--muted);justify-content:center}
+  .pill{background:var(--accent-soft);color:var(--card-fg);opacity:0;will-change:transform,opacity}
+  .pill .mi{width:14px;height:14px;flex:none;color:var(--accent)}
+  .pill .txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+  .pill .tick{margin-left:auto;color:var(--ok);opacity:0;font-weight:700}
+
+  .hub{position:absolute;left:50%;bottom:104px;transform:translateX(-50%);width:352px;
+    background:var(--card);border:1px solid var(--accent);border-radius:16px;padding:15px 18px;
+    box-shadow:0 0 0 4px var(--accent-soft),var(--shadow);opacity:0;text-align:center;will-change:transform,opacity}
+  .hub .path{font-size:14px;font-weight:600;color:var(--accent)}
+  .hub .sub{margin-top:6px;font-size:12.5px;color:var(--muted)}
+
+  .cmd{position:absolute;left:50%;top:256px;transform:translateX(-50%);width:432px;height:44px;
+    background:var(--bg);border:1px solid var(--border);border-radius:11px;display:flex;align-items:center;
+    padding:0 16px;gap:2px;font-size:13.5px;box-shadow:var(--shadow);opacity:0}
+  .cmd .p{color:var(--muted)} .cmd .t{color:var(--card-fg)}
+  .cmd .cur{width:8px;height:16px;background:var(--accent);display:inline-block;border-radius:1px;margin-left:4px}
+  .cmd .done{margin-left:auto;color:var(--ok);font-weight:600;opacity:0;font-size:12px}
+
+  .payoff{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;opacity:0}
+  .payoff h1{font-size:47px;font-weight:700;letter-spacing:-.035em;text-align:center}
+  .payoff .brand{font-size:19px;font-weight:700;color:var(--accent);letter-spacing:-.01em}
+  .payoff .desc{font-size:14.5px;color:var(--muted);font-weight:500}
+</style>
+<body class="dark">
+<div class="stage" id="stage">
+  <div class="caps">
+    <div class="cap" id="cap0">A memory you add in <b>one agent</b>…</div>
+    <div class="cap" id="cap1">…normally stays only in <b>that</b> agent.</div>
+    <div class="cap" id="cap2">agent-parity commits it to the repo — so <b>every agent shares it</b>.</div>
+  </div>
+
+  <div id="system">
+    <div class="agents" id="agents"></div>
+    <div class="cmd" id="cmd">
+      <span class="p">$</span><span class="t mono" id="cmdt"></span><span class="cur" id="cur"></span>
+      <span class="done" id="cmddone">✓ installed</span>
+    </div>
+    <div class="hub" id="hub">
+      <div class="path mono">.agents/&nbsp;&nbsp;committed to the repo</div>
+      <div class="sub">memory · skills · AGENTS.md</div>
+    </div>
+  </div>
+
+  <div class="payoff" id="payoff">
+    <h1>One&nbsp;environment.<br>Every&nbsp;agent.</h1>
+    <div class="brand">agent-parity</div>
+    <div class="desc">shared memory, skills &amp; instructions — Claude Code · Codex · Cursor · Antigravity</div>
+  </div>
+</div>
+
+<script>
+const FPS=30, DUR=11.5;
+const AGENTS=[
+  {name:'Claude Code', c:'#d97757'},
+  {name:'Codex',       c:'#10a37f'},
+  {name:'Cursor',      c:'#8b8b94'},
+  {name:'Antigravity', c:'#a855f7'},
+];
+const MEM='use pnpm, not npm';
+const MI='<svg class="mi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>';
+
+const wrap=document.getElementById('agents');
+AGENTS.forEach((a,i)=>{
+  const el=document.createElement('div'); el.className='card'; el.id='card'+i;
+  el.innerHTML=`<div class="chead"><span class="dot" style="background:${a.c}"></span><span class="cname">${a.name}</span></div>
+  <div class="slotwrap">
+    <div class="slot empty" id="empty${i}">no shared memory</div>
+    <div class="slot pill" id="pill${i}">${MI}<span class="txt">${MEM}</span><span class="tick" id="tick${i}">✓</span></div>
+  </div>`;
+  wrap.appendChild(el);
+});
+
+const E={out:t=>1-Math.pow(1-t,3),expo:t=>t>=1?1:1-Math.pow(2,-10*t)};
+function seg(t,a,b,e){e=e||E.out;let u=(t-a)/(b-a);u=u<0?0:u>1?1:u;return e(u);}
+const $=id=>document.getElementById(id);
+const op=(id,v)=>{const e=$(id);if(e)e.style.opacity=v;};
+const tf=(id,v)=>{const e=$(id);if(e)e.style.transform=v;};
+
+function render(t){
+  // 1) cards stagger in
+  AGENTS.forEach((a,i)=>{const s=seg(t,0.3+i*0.09,1.15+i*0.09);op('card'+i,s);tf('card'+i,`translateY(${(1-s)*16}px)`);});
+
+  // 2) memory drops into Claude Code
+  const drop=seg(t,1.35,2.15,E.expo);
+  op('pill0',drop); tf('pill0',`translateY(${(1-drop)*-12}px) scale(${.95+.05*drop})`);
+  op('empty0',1-seg(t,1.35,1.75));
+
+  // others stay empty until unify
+  for(let i=1;i<4;i++) op('empty'+i,1-seg(t,5.7+i*0.16,6.2+i*0.16));
+
+  // 3) captions cross-fade
+  op('cap0',seg(t,1.0,1.5)-seg(t,2.5,3.0));
+  op('cap1',seg(t,2.7,3.2)-seg(t,4.4,4.9));
+  op('cap2',seg(t,7.0,7.5)-seg(t,8.3,8.8));
+
+  // 4) command types then done
+  op('cmd',seg(t,3.35,3.75)-seg(t,5.0,5.4));
+  const full='curl -fsSL …/install.sh | sh';
+  const n=Math.floor(seg(t,3.55,4.5)*full.length);
+  $('cmdt').textContent=' '+full.slice(0,n);
+  op('cur',n>=full.length||seg(t,5.0,5.4)>0?0:(Math.floor(t*2)%2?0.3:1));
+  op('cmddone',seg(t,4.6,4.9));
+
+  // 5) hub rises
+  const hub=seg(t,4.8,5.6,E.expo);
+  op('hub',hub); tf('hub',`translateX(-50%) translateY(${(1-hub)*20}px) scale(${.97+.03*hub})`);
+
+  // 6) propagate to the other three, ticks land
+  op('tick0',seg(t,3.9,4.3));
+  for(let i=1;i<4;i++){
+    const p=seg(t,5.8+i*0.18,6.5+i*0.18,E.expo);
+    op('pill'+i,p); tf('pill'+i,`scale(${.9+.1*p})`);
+    op('tick'+i,seg(t,6.6+i*0.18,7.0+i*0.18));
+  }
+
+  // 7) fade whole system, bring payoff
+  const out=seg(t,8.4,9.2);
+  op('system',1-out);
+  const pay=seg(t,8.85,9.65,E.expo);
+  op('payoff',pay); tf('payoff',`translateY(${(1-pay)*12}px)`);
+}
+window.__render=render;
+window.__meta={FPS,DUR,frames:Math.round(FPS*DUR)};
+if(!window.__capture){let s=null;(function loop(ts){if(s===null)s=ts;render(((ts-s)/1000)%DUR);requestAnimationFrame(loop);})(performance.now());}
+</script>
