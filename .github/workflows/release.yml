@@ -1,0 +1,155 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "fixture version for a test-only run (no release)"
+        required: false
+        default: "v0.0.0-ci"
+
+permissions:
+  contents: write
+
+jobs:
+  # One matrix covers every unix platform the README promises: linux
+  # amd64/arm64 and macOS intel/arm64. The suite itself is platform-neutral
+  # (tests/lib.sh), so a new platform is just a runner label here.
+  test-unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: go test ./...
+      - run: go test -tags configeditor ./...
+      - run: bash build.sh
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+      - run: sh tests/test_release_assets.sh "${{ inputs.version || github.ref_name }}"
+      - run: sh tests/test_markers.sh
+      - run: sh tests/test_uninstall.sh
+      - run: sh tests/test_install_markers.sh
+      - run: sh tests/test_readme_install.sh "${{ inputs.version || github.ref_name }}"
+      - run: sh tests/test_zero_install.sh "${{ inputs.version || github.ref_name }}"
+      - run: sh tests/test_memory_merge.sh "${{ inputs.version || github.ref_name }}"
+      - run: sh tests/test_update.sh
+      - run: sh tests/test_pre_push.sh
+
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - shell: bash
+        run: |
+          go test ./...
+          go test -tags configeditor ./...
+          VERSION="${{ inputs.version || github.ref_name }}" bash build.sh
+      - shell: powershell
+        run: .\tests\test_powershell_syntax.ps1
+      - shell: powershell
+        run: .\tests\test_atomic_write.ps1
+      - shell: powershell
+        run: .\tests\test_powershell_newlines.ps1
+      - shell: powershell
+        run: .\tests\test_windows_launcher_update.ps1
+      - shell: powershell
+        run: .\tests\test_markers.ps1
+      - shell: powershell
+        run: .\tests\test_claude_wrapper.ps1
+      - shell: powershell
+        run: .\tests\test_install_windows.ps1 "${{ inputs.version || github.ref_name }}"
+      - shell: powershell
+        run: .\tests\test_zero_install_windows.ps1 "${{ inputs.version || github.ref_name }}"
+      - shell: bash
+        run: sh tests/test_git_bash.sh
+      - shell: bash
+        run: sh tests/test_memory_merge.sh "${{ inputs.version || github.ref_name }}"
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [test-unix, test-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: bash build.sh
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+      - run: sh tests/test_release_assets.sh "${{ inputs.version || github.ref_name }}"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+
+  smoke-linux:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for latest install asset
+        run: |
+          for attempt in $(seq 1 12); do
+            if curl -fsSL https://github.com/libkim/agent-parity/releases/latest/download/install.sh -o install.sh \
+              && grep -qxF 'PACKAGED_VERSION="${{ inputs.version || github.ref_name }}"' install.sh; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+      - name: Run README install command
+        run: |
+          target=$(mktemp -d)
+          cd "$target"
+          curl -fsSL https://github.com/libkim/agent-parity/releases/latest/download/install.sh | sh
+          test "$(tr -d '\r\n' < .agents/mcp/memory/VERSION)" = "${{ inputs.version || github.ref_name }}"
+
+  smoke-windows:
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - name: Wait for latest install asset
+        shell: powershell
+        run: |
+          $url = "https://github.com/libkim/agent-parity/releases/latest/download/install.ps1"
+          $expected = '$PackagedVersion = "${{ inputs.version || github.ref_name }}"'
+          for ($attempt = 1; $attempt -le 12; $attempt++) {
+            try {
+              $source = [string](Invoke-RestMethod -Uri $url)
+              if (($source -split "`r?`n") -contains $expected) { exit 0 }
+            } catch {}
+            Start-Sleep -Seconds 5
+          }
+          exit 1
+      - name: Run README install command
+        shell: powershell
+        run: |
+          $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+          $target = Join-Path $tempBase ("agent-parity-release-smoke-" + [Guid]::NewGuid().ToString("N"))
+          New-Item -ItemType Directory -Path $target | Out-Null
+          $target = (Resolve-Path -LiteralPath $target).Path
+          if (!$target.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase)) { throw "unsafe smoke path" }
+          try {
+            Push-Location -LiteralPath $target
+            try {
+              irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 | iex
+            } finally {
+              Pop-Location
+            }
+            $installed = [IO.File]::ReadAllText((Join-Path $target ".agents\mcp\memory\VERSION")).Trim()
+            if ($installed -ne "${{ inputs.version || github.ref_name }}") { throw "installed $installed" }
+          } finally {
+            if ($target.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase)) {
+              Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
