@@ -22,9 +22,9 @@ the same skills and instructions (`AGENTS.md`).
 
 ## Features
 
-- **Dependency-free**: uses two static native executables: `memory-mcp` serves
-  memory, while `agent-parity-config` safely edits JSON/TOML; no Go, Node, or
-  Python runtime is required.
+- **Dependency-free**: no package manager to set up and no packages to install.
+  The shared environment is plain files in your repo, and the helpers ship as
+  small native binaries.
 - **Non-invasive**: changes project settings only and never
   edits global agent settings. Release executables live in a per-user cache
   shared across projects.
