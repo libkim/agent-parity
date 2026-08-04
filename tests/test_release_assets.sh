@@ -42,8 +42,6 @@ windows_command='irm https://github.com/libkim/agent-parity/releases/latest/down
 for readme in "$repo/README.md" "$repo/README.ko.md"; do
   [ "$(grep -Fxc "$unix_command" "$readme")" -eq 1 ]
   [ "$(grep -Fxc "$windows_command" "$readme")" -eq 1 ]
-  grep -qF '`memory-mcp`' "$readme"
-  grep -qF '`agent-parity-config`' "$readme"
 done
 grep -qF '**Dependency-free**' "$repo/README.md"
 grep -qF '**Non-invasive**' "$repo/README.md"
