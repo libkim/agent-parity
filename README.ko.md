@@ -140,12 +140,12 @@ CLI `status` 자체는 이미 실행 중인 에이전트 세션을 들여다보�
 | `git` | `all artifacts tracked` | 설치 산출물이 Git으로 동기화될 수 있습니다. |
 |  | `IGNORED ...` | 일부 산출물이 무시돼 있습니다. `install` 또는 더 새 버전의 `update`가 관리하는 `.gitignore` 블록을 고치기 전까지 동기화되지 않습니다. |
 |  | `memory merge driver: registered` / `missing` | `.agents/memory` 파일용 git 머지 드라이버가 `.git/config`에 등록됐는지 여부입니다. |
-|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | 미커밋 관리 파일의 push를 막는 pre-push 훅의 설치 여부입니다. `core.hooksPath`로 훅 매니저가 훅을 관리하는 경우에는 가드를 직접 연결하는 방법을 안내합니다. [직접 pre-push 훅 추가하기](#직접-pre-push-훅-추가하기) 참고. |
+|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | 미커밋 관리 파일의 push를 막는 pre-push 훅의 설치 여부입니다. `core.hooksPath`로 훅 매니저가 훅을 관리하는 경우에는 가드를 직접 연결하는 방법을 안내합니다. [git pre-push 훅](#git-pre-push-훅) 참고. |
 | `parity` | `<파일> exists ...` | 에이전트별 지침 파일이 동작을 갈라놓습니다. 내용을 `AGENTS.md`로 합쳐 주세요. |
 
 </details>
 
-### 직접 pre-push 훅 추가하기
+### git pre-push 훅
 
 agent-parity는 관리 파일이 미커밋인 상태의 push를 막는 `pre-push` 훅을 설치해, 크로스 머신 공유가 조용히 깨지지 않게 합니다. git은 이벤트당 훅을 하나만 실행하므로 이 훅은 디스패처이고, 그래서 사용자가 자신의 pre-push 훅을 추가하는 방법이 달라집니다:
 
@@ -186,7 +186,7 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 
 메모리는 보통 고유 ID로 한 번 생성되므로 두 머신이 같은 파일을 건드릴 일이 드뭅니다. 그런 경우(양쪽에서 명시적 편집)에는 함께 설치되는 git 머지 드라이버가 태그를 union하고, 한쪽만 본문을 바꿨으면 그 본문을 취합니다. 양쪽이 본문을 다르게 바꾸면 원래대로 충돌합니다.
 
-이 공유는 파일이 커밋돼야 작동하므로, 함께 설치되는 pre-push 훅이 관리 파일이 미커밋인 상태의 push를 막습니다([직접 pre-push 훅 추가하기](#직접-pre-push-훅-추가하기) 참고).
+이 공유는 파일이 커밋돼야 작동하므로, 함께 설치되는 pre-push 훅이 관리 파일이 미커밋인 상태의 push를 막습니다([git pre-push 훅](#git-pre-push-훅) 참고).
 
 ### 스킬
 
