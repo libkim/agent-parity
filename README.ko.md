@@ -140,10 +140,17 @@ CLI `status` 자체는 이미 실행 중인 에이전트 세션을 들여다보�
 | `git` | `all artifacts tracked` | 설치 산출물이 Git으로 동기화될 수 있습니다. |
 |  | `IGNORED ...` | 일부 산출물이 무시돼 있습니다. `install` 또는 더 새 버전의 `update`가 관리하는 `.gitignore` 블록을 고치기 전까지 동기화되지 않습니다. |
 |  | `memory merge driver: registered` / `missing` | `.agents/memory` 파일용 git 머지 드라이버가 `.git/config`에 등록됐는지 여부입니다. |
-|  | `pre-push guard: registered` / `your own pre-push hook is in place` / `missing` | 미커밋 관리 파일의 push를 막는 pre-push 훅의 설치 여부입니다. 기존 훅이 있으면 그대로 둡니다. |
+|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | 미커밋 관리 파일의 push를 막는 pre-push 훅의 설치 여부입니다. `core.hooksPath`로 훅 매니저가 훅을 관리하는 경우에는 가드를 직접 연결하는 방법을 안내합니다. [직접 pre-push 훅 추가하기](#직접-pre-push-훅-추가하기) 참고. |
 | `parity` | `<파일> exists ...` | 에이전트별 지침 파일이 동작을 갈라놓습니다. 내용을 `AGENTS.md`로 합쳐 주세요. |
 
 </details>
+
+### 직접 pre-push 훅 추가하기
+
+agent-parity는 관리 파일이 미커밋인 상태의 push를 막는 `pre-push` 훅을 설치해, 크로스 머신 공유가 조용히 깨지지 않게 합니다. git은 이벤트당 훅을 하나만 실행하므로 이 훅은 디스패처이고, 그래서 사용자가 자신의 pre-push 훅을 추가하는 방법이 달라집니다:
+
+- **자신의 훅은 `.git/hooks/pre-push.user`에 두세요**(실행 권한 부여). 디스패처가 가드와 함께 실행하고, 둘 중 하나라도 실패하면 push를 막습니다. `.git/hooks/pre-push` 자체는 덮어쓰지 마세요 — 그게 디스패처입니다. 설치 시점에 기존 훅이 있으면 자동으로 `pre-push.user`로 옮겨지고, `uninstall`이 원위치로 되돌립니다.
+- **`core.hooksPath`로 훅 매니저(예: husky)가 훅을 관리하는 경우**, agent-parity는 그 디렉터리에 아예 설치하지 않습니다. 사용자가 자신의 훅에서 `.agents/scripts/pre-push.sh "$@"`를 호출해 가드를 유지하세요.
 
 ### 주의사항
 
@@ -179,7 +186,7 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 
 메모리는 보통 고유 ID로 한 번 생성되므로 두 머신이 같은 파일을 건드릴 일이 드뭅니다. 그런 경우(양쪽에서 명시적 편집)에는 함께 설치되는 git 머지 드라이버가 태그를 union하고, 한쪽만 본문을 바꿨으면 그 본문을 취합니다. 양쪽이 본문을 다르게 바꾸면 원래대로 충돌합니다.
 
-이 공유는 파일이 커밋돼야 작동하므로, 함께 설치되는 pre-push 훅이 관리 파일(새 메모리든 배선 변경이든)이 미커밋인 상태의 push를 거부합니다. 표시된 관리 변경을 모두 커밋한 뒤 다시 push하세요. 기존 `pre-push` 훅이 있으면 `pre-push.user`로 보존해 디스패처에서 이어 실행합니다. `core.hooksPath`로 훅 매니저(예: husky)가 훅을 관리하는 경우에는, 사용자가 자신의 훅에서 `.agents/scripts/pre-push.sh "$@"`를 호출해 직접 가드를 연결하세요.
+이 공유는 파일이 커밋돼야 작동하므로, 함께 설치되는 pre-push 훅이 관리 파일이 미커밋인 상태의 push를 막습니다([직접 pre-push 훅 추가하기](#직접-pre-push-훅-추가하기) 참고).
 
 ### 스킬
 
