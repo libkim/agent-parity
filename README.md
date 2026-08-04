@@ -163,12 +163,12 @@ inspection according to the reported wiring state.
 | `git` | `all artifacts tracked` | Installed artifacts are eligible to sync through Git. |
 |  | `IGNORED ...` | One or more installed artifacts are ignored and will not sync until `install` or a newer-version `update` repairs the managed `.gitignore` block. |
 |  | `memory merge driver: registered` / `missing` | Whether the git merge driver for `.agents/memory` files is registered in `.git/config`. |
-|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | Whether the pre-push hook that blocks pushing uncommitted managed files is installed. When a hook manager owns your hooks through `core.hooksPath`, it reports how to wire the guard in instead. See [Adding your own pre-push hook](#adding-your-own-pre-push-hook). |
+|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | Whether the pre-push hook that blocks pushing uncommitted managed files is installed. When a hook manager owns your hooks through `core.hooksPath`, it reports how to wire the guard in instead. See [Git pre-push hooks](#git-pre-push-hooks). |
 | `parity` | `<file> exists ...` | An agent-specific instruction file would make agent behavior diverge; merge its content into `AGENTS.md`. |
 
 </details>
 
-### Adding your own pre-push hook
+### Git pre-push hooks
 
 agent-parity installs a `pre-push` hook that blocks a push while any managed
 file is uncommitted, so cross-machine sharing does not silently break. Because
@@ -284,7 +284,7 @@ it; a body edited differently on both sides conflicts, as it should.
 
 Cross-machine sharing only works if these files are committed, so a bundled
 pre-push hook refuses a push while any managed file is uncommitted (see
-[Adding your own pre-push hook](#adding-your-own-pre-push-hook)).
+[Git pre-push hooks](#git-pre-push-hooks)).
 
 ### Skills
 
