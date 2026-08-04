@@ -163,10 +163,26 @@ inspection according to the reported wiring state.
 | `git` | `all artifacts tracked` | Installed artifacts are eligible to sync through Git. |
 |  | `IGNORED ...` | One or more installed artifacts are ignored and will not sync until `install` or a newer-version `update` repairs the managed `.gitignore` block. |
 |  | `memory merge driver: registered` / `missing` | Whether the git merge driver for `.agents/memory` files is registered in `.git/config`. |
-|  | `pre-push guard: registered` / `your own pre-push hook is in place` / `missing` | Whether the pre-push hook that blocks pushing uncommitted managed files is installed; a pre-existing hook is left in place. |
+|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | Whether the pre-push hook that blocks pushing uncommitted managed files is installed. When a hook manager owns your hooks through `core.hooksPath`, it reports how to wire the guard in instead. See [Adding your own pre-push hook](#adding-your-own-pre-push-hook). |
 | `parity` | `<file> exists ...` | An agent-specific instruction file would make agent behavior diverge; merge its content into `AGENTS.md`. |
 
 </details>
+
+### Adding your own pre-push hook
+
+agent-parity installs a `pre-push` hook that blocks a push while any managed
+file is uncommitted, so cross-machine sharing does not silently break. Because
+git runs only one hook per event, that hook is a dispatcher — which changes how
+you add a pre-push hook of your own:
+
+- **Put your hook at `.git/hooks/pre-push.user`** (make it executable). The
+  dispatcher runs it alongside the guard and fails the push if either fails. Do
+  not overwrite `.git/hooks/pre-push` itself — that is the dispatcher. An
+  existing hook found at install time is moved to `pre-push.user` for you, and
+  `uninstall` moves it back.
+- **If a hook manager owns your hooks through `core.hooksPath`** (for example
+  husky), agent-parity does not install into that directory at all. Call
+  `.agents/scripts/pre-push.sh "$@"` from your own hook to keep the guard.
 
 ### Caution
 
@@ -267,11 +283,8 @@ git merge driver unions the tags and keeps the body if only one side changed
 it; a body edited differently on both sides conflicts, as it should.
 
 Cross-machine sharing only works if these files are committed, so a bundled
-pre-push hook refuses a push while any managed file — a new memory or a wiring
-change — is uncommitted. Commit every listed managed change before pushing again.
-An existing `pre-push` hook is preserved as `pre-push.user` and chained from the
-dispatcher. If a hook manager owns your hooks through `core.hooksPath` (for
-example husky), wire the guard in yourself by calling `.agents/scripts/pre-push.sh "$@"` from your hook.
+pre-push hook refuses a push while any managed file is uncommitted (see
+[Adding your own pre-push hook](#adding-your-own-pre-push-hook)).
 
 ### Skills
 
