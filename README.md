@@ -172,20 +172,18 @@ which blocks a push while any managed file is uncommitted, so cross-machine
 sharing does not silently break. git runs only one hook per event, so the hook
 is installed only when `.git/hooks/pre-push` is empty or already ours.
 
-If a hook already owns that entry point, agent-parity leaves it alone and does
-not try to wrap it. Wiring the guard in is then up to you:
+To run your own checks alongside the guard, make your own hook call
+`.agents/scripts/pre-push.sh`. Which case applies depends on your setup:
 
-- **If you already have your own `pre-push` hook**, add a line that runs
-  `.agents/scripts/pre-push.sh` to it. agent-parity does not rename, chain, or
-  overwrite your hook.
-- **If agent-parity installed the hook and you now want your own checks**, add a
-  line that runs `.agents/scripts/pre-push.sh` to your own pre-push hook and put
-  that hook at `.git/hooks/pre-push`; agent-parity then leaves it alone. Do not
-  edit the hook agent-parity installed, since install and update regenerate it
-  and uninstall removes it.
+- **If you already have your own `pre-push` hook**, agent-parity leaves it alone;
+  add a line that runs `.agents/scripts/pre-push.sh` to it.
 - **If a hook manager such as husky owns your hooks through `core.hooksPath`**,
   agent-parity does not register into that directory. Add `.agents/scripts/pre-push.sh`
   as one of the manager's pre-push steps (for husky, in `.husky/pre-push`).
+- **If agent-parity installed the hook and you now want your own checks**, put
+  your own pre-push hook at `.git/hooks/pre-push` and add a line that runs
+  `.agents/scripts/pre-push.sh` to it. Do not edit the hook agent-parity
+  installed, since install and update regenerate it and uninstall removes it.
 
 ### Caution
 
