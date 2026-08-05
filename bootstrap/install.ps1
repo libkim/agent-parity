@@ -485,23 +485,15 @@ function Get-PrePushHookPath {
   return (Join-Path $dir "pre-push")
 }
 
-function Test-CustomHooksPath {
-  & git -C $Target config --get core.hooksPath *> $null
-  return ($LASTEXITCODE -eq 0)
-}
-
 function Reg-PrePushHook {
   if (!(Test-GitRepo)) { return }
-  if (Test-CustomHooksPath) {
-    Write-Output "git: core.hooksPath is set (a hook manager owns your hooks) -- call .agents/scripts/pre-push.sh from your pre-push hook to guard managed files"
-    return
-  }
   $hook = Get-PrePushHookPath
   if (!$hook) { return }
-  # Own the entry point only when it is empty or already ours. A user's own hook
-  # or a hook-manager hook is left alone; wiring the guard in is the user's job.
+  # The entry point (Get-PrePushHookPath resolves core.hooksPath) is ours to own
+  # only when it is empty or already ours. Any other hook, a user's or a hook
+  # manager's, is left alone; wiring the guard in is then the user's job.
   if ((Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*")) {
-    Write-Output "git: your own pre-push hook is in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
+    Write-Output "git: a pre-push hook is already in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
     return
   }
   $body = "#!/bin/sh`n" + $PrePushMarker + "`n" +

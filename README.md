@@ -160,7 +160,7 @@ inspection according to the reported wiring state.
 | `git` | `all artifacts tracked` | Installed artifacts are eligible to sync through Git. |
 |  | `IGNORED ...` | One or more installed artifacts are ignored and will not sync until `install` or a newer-version `update` repairs the managed `.gitignore` block. |
 |  | `memory merge driver: registered` / `missing` | Whether the git merge driver for `.agents/memory` files is registered in `.git/config`. |
-|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | Whether the pre-push hook that blocks pushing uncommitted managed files is installed. When a hook manager owns your hooks through `core.hooksPath`, it reports how to wire the guard in instead. See [Git pre-push hooks](#git-pre-push-hooks). |
+|  | `pre-push guard: registered` / `a pre-push hook is in place ...` / `missing` | Whether the pre-push hook that blocks pushing uncommitted managed files is installed. When another pre-push hook already occupies the entry point, it reports how to wire the guard in instead. See [Git pre-push hooks](#git-pre-push-hooks). |
 | `parity` | `<file> exists ...` | An agent-specific instruction file would make agent behavior diverge; merge its content into `AGENTS.md`. |
 
 </details>
@@ -169,19 +169,19 @@ inspection according to the reported wiring state.
 
 agent-parity installs a `pre-push` hook that runs `.agents/scripts/pre-push.sh`,
 which blocks a push while any managed file is uncommitted, so cross-machine
-sharing does not silently break. git runs only one hook per event, so the hook
-is installed only when `.git/hooks/pre-push` is empty or already ours.
+sharing does not silently break. git runs only one hook per event, so the hook is
+installed only when the pre-push entry point is empty or already ours. That entry
+point is `.git/hooks/pre-push`, or, if a hook manager like husky set
+`core.hooksPath`, the `pre-push` file in that directory.
 
 To run your own checks alongside the guard, make your own hook call
-`.agents/scripts/pre-push.sh`. Which case applies depends on your setup:
+`.agents/scripts/pre-push.sh`:
 
-- **If you already have your own `pre-push` hook**, agent-parity leaves it alone;
-  add a line that runs `.agents/scripts/pre-push.sh` to it.
-- **If a hook manager such as husky owns your hooks through `core.hooksPath`**,
-  agent-parity does not register into that directory. Add `.agents/scripts/pre-push.sh`
-  as one of the manager's pre-push steps (for husky, in `.husky/pre-push`).
+- **If a pre-push hook is already there** (your own, or a hook manager's such as
+  husky), agent-parity leaves it alone; add a line that runs
+  `.agents/scripts/pre-push.sh` to it.
 - **If agent-parity installed the hook and you now want your own checks**, put
-  your own pre-push hook at `.git/hooks/pre-push` and add a line that runs
+  your own pre-push hook at that entry point and add a line that runs
   `.agents/scripts/pre-push.sh` to it. Do not edit the hook agent-parity
   installed, since install and update regenerate it and uninstall removes it.
 

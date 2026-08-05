@@ -1,9 +1,10 @@
 #!/usr/bin/env sh
-# The pre-push guard runs the tracked .agents/scripts/pre-push.sh from a
-# .git/hooks/pre-push shim: it blocks while managed files are uncommitted, passes
-# once they are committed, is removed by uninstall, and is only installed when the
-# entry point is empty or ours. A user's own hook and a core.hooksPath manager are
-# left untouched, with a message telling the user to wire the guard in.
+# The pre-push guard runs the tracked .agents/scripts/pre-push.sh from a shim at
+# git's active pre-push entry point (.git/hooks or the core.hooksPath dir): it
+# blocks while managed files are uncommitted, passes once they are committed, is
+# removed by uninstall, and is only installed when that entry point is empty or
+# ours. Any pre-existing hook there is left untouched, with a message telling the
+# user to wire the guard in.
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -71,21 +72,34 @@ hook2="$root2/.git/hooks/pre-push"
 grep -q MINE-RAN "$hook2" || { echo "install clobbered the user's pre-push hook" >&2; exit 1; }
 grep -qF "agent-parity managed pre-push hook" "$hook2" && { echo "install overwrote the user hook with ours" >&2; exit 1; }
 [ ! -e "$hook2.user" ] || { echo "install created pre-push.user (should not rename)" >&2; exit 1; }
-grep -q "your own pre-push hook is in place" "$root2/out" || { echo "install did not report the user hook" >&2; exit 1; }
+grep -q "a pre-push hook is already in place" "$root2/out" || { echo "install did not report the user hook" >&2; exit 1; }
 # uninstall leaves the user's own hook alone.
 AGENT_PARITY_CONFIG_EDITOR="$repo/dist/$editor_asset" sh "$root2/.agents/scripts/uninstall.sh" >/dev/null 2>&1
 grep -q MINE-RAN "$hook2" || { echo "uninstall removed the user's own pre-push hook" >&2; exit 1; }
 
-# When core.hooksPath is set (a hook manager owns the dir), install does not
-# touch it and reports how to wire the guard in.
+# core.hooksPath just relocates the entry point. When the resolved dir has no
+# pre-push yet, install writes the guard there (not into .git/hooks).
 root3=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-prepush3.XXXXXX")
 git -C "$root3" init -q
 mkdir -p "$root3/.husky"
 git -C "$root3" config core.hooksPath .husky
 install_into "$root3" > "$root3/out" 2>&1 || { cat "$root3/out" >&2; exit 1; }
+grep -qF "agent-parity managed pre-push hook" "$root3/.husky/pre-push" || { echo "install did not write the guard into the core.hooksPath dir" >&2; exit 1; }
 [ ! -e "$root3/.git/hooks/pre-push" ] || { echo "install wrote into .git/hooks despite core.hooksPath" >&2; exit 1; }
-[ -z "$(ls -A "$root3/.husky" 2>/dev/null)" ] || { echo "install wrote into the hook manager's dir" >&2; exit 1; }
-grep -q "core.hooksPath is set" "$root3/out" || { echo "install did not report the core.hooksPath case" >&2; exit 1; }
 rm -rf "$root3"
 
-echo "pre-push guard installs, blocks, uninstalls, and defers to a user hook or core.hooksPath: OK"
+# When a hook already sits at the core.hooksPath entry point, install leaves it
+# alone, same as any other pre-existing hook.
+root4=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-prepush4.XXXXXX")
+git -C "$root4" init -q
+mkdir -p "$root4/.husky"
+git -C "$root4" config core.hooksPath .husky
+printf '#!/bin/sh\necho HUSKY-RAN\n' > "$root4/.husky/pre-push"
+chmod +x "$root4/.husky/pre-push"
+install_into "$root4" > "$root4/out" 2>&1 || { cat "$root4/out" >&2; exit 1; }
+grep -q HUSKY-RAN "$root4/.husky/pre-push" || { echo "install clobbered the core.hooksPath hook" >&2; exit 1; }
+grep -qF "agent-parity managed pre-push hook" "$root4/.husky/pre-push" && { echo "install overwrote the core.hooksPath hook" >&2; exit 1; }
+grep -q "a pre-push hook is already in place" "$root4/out" || { echo "install did not report the existing core.hooksPath hook" >&2; exit 1; }
+rm -rf "$root4"
+
+echo "pre-push guard installs (following core.hooksPath), blocks, uninstalls, and defers to any pre-existing hook: OK"

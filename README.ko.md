@@ -137,20 +137,19 @@ CLI `status` 자체는 이미 실행 중인 에이전트 세션을 들여다보�
 | `git` | `all artifacts tracked` | 설치 산출물이 Git으로 동기화될 수 있습니다. |
 |  | `IGNORED ...` | 일부 산출물이 무시돼 있습니다. `install` 또는 더 새 버전의 `update`가 관리하는 `.gitignore` 블록을 고치기 전까지 동기화되지 않습니다. |
 |  | `memory merge driver: registered` / `missing` | `.agents/memory` 파일용 git 머지 드라이버가 `.git/config`에 등록됐는지 여부입니다. |
-|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | 미커밋 관리 대상 파일의 push를 막는 pre-push 훅의 설치 여부입니다. `core.hooksPath`로 훅 매니저가 훅을 관리하는 경우에는 가드를 직접 연결하는 방법을 안내합니다. [git pre-push 훅](#git-pre-push-훅) 참고. |
+|  | `pre-push guard: registered` / `a pre-push hook is in place ...` / `missing` | 미커밋 관리 대상 파일의 push를 막는 pre-push 훅의 설치 여부입니다. 진입점에 다른 pre-push 훅이 이미 있으면 가드를 직접 연결하는 방법을 안내합니다. [git pre-push 훅](#git-pre-push-훅) 참고. |
 | `parity` | `<파일> exists ...` | 에이전트별 지침 파일이 동작을 갈라놓습니다. 내용을 `AGENTS.md`로 합쳐 주세요. |
 
 </details>
 
 ### git pre-push 훅
 
-agent-parity는 `.agents/scripts/pre-push.sh`를 실행하는 `pre-push` 훅을 설치합니다. 이 스크립트는 관리 대상 파일이 미커밋인 상태의 push를 막아, 크로스 머신 공유가 조용히 깨지지 않게 합니다. git은 이벤트당 훅을 하나만 실행하므로, 이 훅은 `.git/hooks/pre-push`가 비어 있거나 이미 우리 것일 때만 설치됩니다.
+agent-parity는 `.agents/scripts/pre-push.sh`를 실행하는 `pre-push` 훅을 설치합니다. 이 스크립트는 관리 대상 파일이 미커밋인 상태의 push를 막아, 크로스 머신 공유가 조용히 깨지지 않게 합니다. git은 이벤트당 훅을 하나만 실행하므로, 이 훅은 pre-push 진입점이 비어 있거나 이미 우리 것일 때만 설치됩니다. 진입점은 `.git/hooks/pre-push`이며, husky 같은 훅 매니저가 `core.hooksPath`를 설정했다면 그 디렉터리의 `pre-push` 파일입니다.
 
-가드와 함께 자신의 검사를 실행하려면, 자신의 훅에서 `.agents/scripts/pre-push.sh`를 호출하게 하세요. 어떤 경우에 해당하는지는 환경에 따라 다릅니다:
+가드와 함께 자신의 검사를 실행하려면, 자신의 훅에서 `.agents/scripts/pre-push.sh`를 호출하게 하세요:
 
-- **이미 자신의 `pre-push` 훅이 있으면**, agent-parity는 그것을 건드리지 않습니다. 그 훅에 `.agents/scripts/pre-push.sh`를 실행하는 줄을 추가하세요.
-- **husky처럼 훅 매니저가 `core.hooksPath`로 훅을 관리하는 경우**, agent-parity는 그 디렉터리에 등록하지 않습니다. `.agents/scripts/pre-push.sh`를 매니저의 pre-push 단계로 추가하세요(husky라면 `.husky/pre-push`에).
-- **agent-parity가 훅을 설치한 뒤 자신의 검사를 넣고 싶으면**, `.git/hooks/pre-push`에 자신의 pre-push 훅을 두고 그 안에 `.agents/scripts/pre-push.sh`를 실행하는 줄을 추가하세요. agent-parity가 설치한 훅을 직접 수정하지는 마세요. install·update가 재생성하고 uninstall이 제거합니다.
+- **이미 pre-push 훅이 있으면**(자신의 훅이든, husky 같은 훅 매니저의 것이든), agent-parity는 그것을 건드리지 않습니다. 그 훅에 `.agents/scripts/pre-push.sh`를 실행하는 줄을 추가하세요.
+- **agent-parity가 훅을 설치한 뒤 자신의 검사를 넣고 싶으면**, 그 진입점에 자신의 pre-push 훅을 두고 `.agents/scripts/pre-push.sh`를 실행하는 줄을 추가하세요. agent-parity가 설치한 훅을 직접 수정하지는 마세요. install·update가 재생성하고 uninstall이 제거합니다.
 
 ### 주의사항
 
