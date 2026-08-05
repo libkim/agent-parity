@@ -9,7 +9,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.gif">
-    <img src="assets/demo-light.gif" alt="하나의 환경, 모든 에이전트 — 한 에이전트에 추가한 메모리와 스킬이 저장소에 커밋되어 Claude Code·Codex·Cursor·Antigravity가 공유합니다" width="820">
+    <img src="assets/demo-light.gif" alt="하나의 환경, 모든 에이전트: 한 에이전트에 추가한 메모리와 스킬이 저장소에 커밋되어 Claude Code·Codex·Cursor·Antigravity가 공유합니다" width="820">
   </picture>
 </p>
 
@@ -20,13 +20,10 @@
 - **의존성 없음**: 설치할 패키지 매니저도, 패키지도 없습니다. 공유 환경은
   저장소 안의 평문 파일이고 보조 실행 파일은 작은 네이티브 바이너리로
   제공됩니다.
-- **비침습**: 프로젝트 설정만 변경하고 에이전트 전역 설정은
-  건드리지 않습니다. 릴리스 실행 파일은 여러 프로젝트가 공유하는 사용자별
-  캐시에 저장합니다.
-- **무설치**: 설치된 배선을 한 번 커밋하면 새 머신에서 install이나 update
-  명령을 실행할 필요가 없습니다. 첫 에이전트 세션이 현재 플랫폼 실행 파일을
-  자동으로 내려받아 검증하며, 크로스 OS 교정 뒤에는 에이전트 세션만 재시작하면
-  됩니다.
+- **비침습**: 프로젝트 설정만 변경하고 에이전트 전역 설정은 건드리지 않으며,
+  자기 항목만 병합하므로 사용자의 다른 설정은 그대로 둡니다.
+- **무설치**: 관리 대상 파일을 한 번 커밋해두면 새로 받은 저장소는 install이나
+  update 명령이 필요 없습니다. 다음 에이전트 세션에서 설정이 활성화됩니다.
 
 ## 지원 에이전트 (2026-07-10 검증 기준)
 
@@ -94,8 +91,8 @@ agent-parity는 관리 명령들을 `agent-parity` 스킬로 노출하므로, �
 | --- | --- |
 | `status` | 프로젝트 파일과 로컬에서 쓸 수 있는 에이전트 CLI를 점검합니다. |
 | `version` | 설치된 버전과 최신 버전을 보고합니다. |
-| `update` | 설치 버전이 최신이면 변경 없이 종료하고, 더 최신 릴리스가 있으면 고정 런타임 메타데이터·런처·등록·스킬 배선·Claude 설정·마커 블록을 적용합니다. |
-| `uninstall` | 프로젝트 배선을 제거하되 공유 실행 파일 캐시와, 기본적으로 메모리 저장소는 남깁니다. `--purge`를 붙이면 메모리 저장소도 지웁니다. |
+| `update` | 설치 버전이 최신이면 변경 없이 종료하고, 더 최신 릴리스가 있으면 고정 런타임 메타데이터·런처·등록·스킬 연동·Claude 설정·마커 블록을 적용합니다. |
+| `uninstall` | 프로젝트 관리 대상 파일을 제거하되 공유 실행 파일 캐시와, 기본적으로 메모리 저장소는 남깁니다. `--purge`를 붙이면 메모리 저장소도 지웁니다. |
 
 | 위치 | 자동 스킬 호출 | 수동 스킬 호출 |
 | --- | --- | --- |
@@ -109,7 +106,7 @@ agent-parity는 관리 명령들을 `agent-parity` 스킬로 노출하므로, �
 <details>
 <summary><code>status</code> 출력 항목</summary>
 
-CLI `status` 자체는 이미 실행 중인 에이전트 세션을 들여다보지 않습니다. 대화에서 에이전트에게 status를 요청하면 관리 지침에 따라 현재 세션의 메모리 도구 노출 여부도 추가로 확인하고, 배선 상태에 맞춰 세션 재시작을 안내하거나 설정 파일 점검을 제안합니다.
+CLI `status` 자체는 이미 실행 중인 에이전트 세션을 들여다보지 않습니다. 대화에서 에이전트에게 status를 요청하면 관리 지침에 따라 현재 세션의 메모리 도구 노출 여부도 추가로 확인하고, 연동 상태에 맞춰 세션 재시작을 안내하거나 설정 파일 점검을 제안합니다.
 
 | 출력 항목 | 값 | 의미 |
 | --- | --- | --- |
@@ -140,16 +137,16 @@ CLI `status` 자체는 이미 실행 중인 에이전트 세션을 들여다보�
 | `git` | `all artifacts tracked` | 설치 산출물이 Git으로 동기화될 수 있습니다. |
 |  | `IGNORED ...` | 일부 산출물이 무시돼 있습니다. `install` 또는 더 새 버전의 `update`가 관리하는 `.gitignore` 블록을 고치기 전까지 동기화되지 않습니다. |
 |  | `memory merge driver: registered` / `missing` | `.agents/memory` 파일용 git 머지 드라이버가 `.git/config`에 등록됐는지 여부입니다. |
-|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | 미커밋 관리 파일의 push를 막는 pre-push 훅의 설치 여부입니다. `core.hooksPath`로 훅 매니저가 훅을 관리하는 경우에는 가드를 직접 연결하는 방법을 안내합니다. [git pre-push 훅](#git-pre-push-훅) 참고. |
+|  | `pre-push guard: registered` / `core.hooksPath is set ...` / `missing` | 미커밋 관리 대상 파일의 push를 막는 pre-push 훅의 설치 여부입니다. `core.hooksPath`로 훅 매니저가 훅을 관리하는 경우에는 가드를 직접 연결하는 방법을 안내합니다. [git pre-push 훅](#git-pre-push-훅) 참고. |
 | `parity` | `<파일> exists ...` | 에이전트별 지침 파일이 동작을 갈라놓습니다. 내용을 `AGENTS.md`로 합쳐 주세요. |
 
 </details>
 
 ### git pre-push 훅
 
-agent-parity는 관리 파일이 미커밋인 상태의 push를 막는 `pre-push` 훅을 설치해, 크로스 머신 공유가 조용히 깨지지 않게 합니다. git은 이벤트당 훅을 하나만 실행하므로 이 훅은 디스패처이고, 그래서 사용자가 자신의 pre-push 훅을 추가하는 방법이 달라집니다:
+agent-parity는 관리 대상 파일이 미커밋인 상태의 push를 막는 `pre-push` 훅을 설치해, 크로스 머신 공유가 조용히 깨지지 않게 합니다. git은 이벤트당 훅을 하나만 실행하므로 이 훅은 디스패처이고, 그래서 사용자가 자신의 pre-push 훅을 추가하는 방법이 달라집니다:
 
-- **자신의 훅은 `.git/hooks/pre-push.user`에 두세요**(실행 권한 부여). 디스패처가 가드와 함께 실행하고, 둘 중 하나라도 실패하면 push를 막습니다. `.git/hooks/pre-push` 자체는 덮어쓰지 마세요 — 그게 디스패처입니다. 설치 시점에 기존 훅이 있으면 자동으로 `pre-push.user`로 옮겨지고, `uninstall`이 원위치로 되돌립니다.
+- **자신의 훅은 `.git/hooks/pre-push.user`에 두세요**(실행 권한 부여). 디스패처가 가드와 함께 실행하고, 둘 중 하나라도 실패하면 push를 막습니다. `.git/hooks/pre-push` 자체는 덮어쓰지 마세요. 그게 디스패처입니다. 설치 시점에 기존 훅이 있으면 자동으로 `pre-push.user`로 옮겨지고, `uninstall`이 원위치로 되돌립니다.
 - **`core.hooksPath`로 훅 매니저(예: husky)가 훅을 관리하는 경우**, agent-parity는 그 디렉터리에 아예 설치하지 않습니다. 사용자가 자신의 훅에서 `.agents/scripts/pre-push.sh "$@"`를 호출해 가드를 유지하세요.
 
 ### 주의사항
@@ -158,9 +155,9 @@ agent-parity는 관리 파일이 미커밋인 상태의 push를 막는 `pre-push
 
 ## 동작 방식
 
-이식 가능한 배선, 릴리스 메타데이터, 메모리와 스킬은 저장소에 커밋하지만 MCP 바이너리는 커밋하지 않습니다. `run.sh` / `run.cmd`는 처음 사용할 때 프로젝트에 고정된 릴리스에서 현재 플랫폼 바이너리 하나만 내려받고 `checksums.txt`로 검증한 뒤 프로젝트들이 공유하는 사용자 캐시에 저장합니다. install/update는 같은 캐시에 현재 플랫폼용 소형 `agent-parity-config` 편집기도 설치합니다. 빈 캐시에서 처음 실행되는 self-heal도 동일하게 고정된 편집기를 자동으로 내려받아 검증합니다. 설정을 다루는 관리 명령은 캐시된 편집기로 JSON/TOML을 파싱하고 수정하므로 MCP 서버를 시작하거나 내려받지 않습니다. `status`와 `version`은 최신 릴리스 필드를 확인하는 제한된 네트워크 요청만 수행합니다. 기본 캐시는 Unix에서 `$XDG_CACHE_HOME/agent-parity`(없으면 `~/.cache/agent-parity`), Windows에서 `%LOCALAPPDATA%\agent-parity\cache`이며 `AGENT_PARITY_CACHE`로 바꿀 수 있습니다. `uninstall`은 공유 캐시를 지우지 않습니다. Claude 산출물은 `.agents/`에서 생성합니다. `.claude/skills/`는 git에서 제외하지만, 생성된 `.claude/settings.json`은 커밋하여 새로 받은 저장소에도 다시 생성하는 데 필요한 훅이 있도록 합니다. `.gitignore`가 추적할 배선 파일을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
+이식 가능한 관리 대상 파일, 릴리스 메타데이터, 메모리와 스킬은 저장소에 커밋하지만 MCP 바이너리는 커밋하지 않습니다. `run.sh` / `run.cmd`는 처음 사용할 때 프로젝트에 고정된 릴리스에서 현재 플랫폼 바이너리 하나만 내려받고 `checksums.txt`로 검증한 뒤 프로젝트들이 공유하는 사용자 캐시에 저장합니다. install/update는 같은 캐시에 현재 플랫폼용 소형 `agent-parity-config` 편집기도 설치합니다. 빈 캐시에서 처음 실행되는 self-heal도 동일하게 고정된 편집기를 자동으로 내려받아 검증합니다. 설정을 다루는 관리 명령은 캐시된 편집기로 JSON/TOML을 파싱하고 수정하므로 MCP 서버를 시작하거나 내려받지 않습니다. `status`와 `version`은 최신 릴리스 필드를 확인하는 제한된 네트워크 요청만 수행합니다. 기본 캐시는 Unix에서 `$XDG_CACHE_HOME/agent-parity`(없으면 `~/.cache/agent-parity`), Windows에서 `%LOCALAPPDATA%\agent-parity\cache`이며 `AGENT_PARITY_CACHE`로 바꿀 수 있습니다. `uninstall`은 공유 캐시를 지우지 않습니다. Claude 산출물은 `.agents/`에서 생성합니다. `.claude/skills/`는 git에서 제외하지만, 생성된 `.claude/settings.json`은 커밋하여 새로 받은 저장소에도 다시 생성하는 데 필요한 훅이 있도록 합니다. `.gitignore`가 추적할 관리 대상 파일을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
 
-agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 에이전트 설정과 Claude 설정에는 자기 항목만 병합하므로, 그 안의 다른 설정과 사용자가 다른 서버로 바꿔 둔 `memory` 항목은 보존됩니다. `AGENTS.md`·`.gitignore`의 마커 블록과 생성 shim(런처, 동기화 스크립트, 관리 명령, `agent-parity` 스킬)은 `update`가 최신 상태로 다시 만드니 그 사본은 직접 고치지 마세요. `uninstall`은 자신이 넣은 것을 제거합니다. 메모리 저장소와 `.agents/skills/`의 사용자 스킬은 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 에이전트별 폴더(`.claude`·`.codex`·`.cursor`의 `skills/`)에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 합니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
+agent-parity는 사용자 콘텐츠와 자체 관리 대상 파일을 다르게 다룹니다. 에이전트 설정과 Claude 설정에는 자기 항목만 병합하므로, 그 안의 다른 설정과 사용자가 다른 서버로 바꿔 둔 `memory` 항목은 보존됩니다. `AGENTS.md`·`.gitignore`의 마커 블록과 생성 shim(런처, 동기화 스크립트, 관리 명령, `agent-parity` 스킬)은 `update`가 최신 상태로 다시 만드니 그 사본은 직접 고치지 마세요. `uninstall`은 자신이 넣은 것을 제거합니다. 메모리 저장소와 `.agents/skills/`의 사용자 스킬은 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 에이전트별 폴더(`.claude`·`.codex`·`.cursor`의 `skills/`)에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 합니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
 
 ### 설정 병합 정책
 
@@ -186,7 +183,7 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 
 메모리는 보통 고유 ID로 한 번 생성되므로 두 머신이 같은 파일을 건드릴 일이 드뭅니다. 그런 경우(양쪽에서 명시적 편집)에는 함께 설치되는 git 머지 드라이버가 태그를 union하고, 한쪽만 본문을 바꿨으면 그 본문을 취합니다. 양쪽이 본문을 다르게 바꾸면 원래대로 충돌합니다.
 
-이 공유는 파일이 커밋돼야 작동하므로, 함께 설치되는 pre-push 훅이 관리 파일이 미커밋인 상태의 push를 막습니다([git pre-push 훅](#git-pre-push-훅) 참고).
+이 공유는 파일이 커밋돼야 작동하므로, 함께 설치되는 pre-push 훅이 관리 대상 파일이 미커밋인 상태의 push를 막습니다([git pre-push 훅](#git-pre-push-훅) 참고).
 
 ### 스킬
 
@@ -210,7 +207,7 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 | `.agents/scripts/sync-claude.{sh,ps1}` | 스킬을 `.claude`로 미러링하는 동기화 스크립트 |
 | `.agents/scripts/self-heal.{sh,ps1}` | 관리되는 MCP 등록을 현재 OS용 런처로 재지정하는 스크립트 |
 | `.agents/scripts/merge-memory.sh` | 동시 회상을 병합하는 git 머지 드라이버 |
-| `.agents/scripts/pre-push.sh` | 관리 파일이 미커밋이면 push를 막는 pre-push 가드 |
+| `.agents/scripts/pre-push.sh` | 관리 대상 파일이 미커밋이면 push를 막는 pre-push 가드 |
 | `.agents/claude/settings.json` | 플랫폼 독립 동기화 훅이 담긴 Claude 설정 원본 |
 | `.agents/mcp_config.json` | Antigravity CLI에 메모리 서버 등록 |
 | `.agents/hooks.json` | Antigravity self-heal 훅 |
@@ -225,7 +222,7 @@ agent-parity는 사용자 콘텐츠와 자체 배선을 다르게 다룹니다. 
 | `AGENTS.md` | 마커로 구분된 지침 블록 |
 | `CLAUDE.md` | `@AGENTS.md` 임포트 래퍼 |
 | `.gitattributes` | 메모리 파일을 머지 드라이버로 보내는 관리 블록 |
-| `.gitignore` | 제외 규칙이 설치 배선이나 생성된 Claude 파일을 가릴 때 사용하는 관리 마커 블록 |
+| `.gitignore` | 제외 규칙이 설치한 관리 대상 파일이나 생성된 Claude 파일을 가릴 때 사용하는 관리 마커 블록 |
 
 `install.sh` / `install.ps1`은 원격 설치 전용 진입점입니다. `agent-parity update`를 실행하면 프로젝트 런처가 최신 릴리스의 버전 내장 `update.sh` / `update.ps1` asset을 받습니다. 스크립트에 내장된 버전이 동일 태그의 Raw 템플릿과 설정 편집기 asset을 선택하고 MCP 런처 메타데이터도 그 릴리스로 고정합니다. `.agents/scripts`에는 업데이트 파일을 두지 않습니다.
 
