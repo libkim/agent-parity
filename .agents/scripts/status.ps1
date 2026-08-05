@@ -31,8 +31,8 @@ else {
 }
 $agText = Read-Text (Path-InTarget "AGENTS.md")
 $agState = Get-ManagedBlockState $agText $MarkBegin $MarkEnd
-if ($agState -eq "valid") { Write-Output "AGENTS.md: memory block present" }
-elseif ($agState -eq "absent") { Write-Output "AGENTS.md: memory block missing" }
+if ($agState -eq "valid") { Write-Output "AGENTS.md: agent-parity instruction block present" }
+elseif ($agState -eq "absent") { Write-Output "AGENTS.md: agent-parity instruction block missing" }
 else { Write-Output "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; repair them manually" }
 $gitIgnoreState = Get-ManagedBlockState (Read-Text (Path-InTarget ".gitignore")) $GitIgnoreBegin $GitIgnoreEnd
 if ($gitIgnoreState -eq "invalid") { Write-Output ".gitignore: agent-parity markers are incomplete, duplicated, or out of order; repair them manually" }
@@ -51,8 +51,8 @@ if (Test-GitRepo) {
   }
   if (Test-PrePushHookRegistered) {
     Write-Output "  pre-push guard: registered (.git/hooks/pre-push)"
-  } elseif (Test-PrePushHookForeign) {
-    Write-Output "  pre-push guard: your own pre-push hook is in place (not replaced)"
+  } elseif (Test-CustomHooksPath) {
+    Write-Output "  pre-push guard: core.hooksPath is set -- wire .agents/scripts/pre-push.sh into your hook manager"
   } else {
     Write-Output "  pre-push guard: missing (a session-start hook registers it)"
   }

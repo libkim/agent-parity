@@ -29,16 +29,22 @@ if not "%~2"=="" (
   exit /b 2
 )
 set "AGENT_PARITY_TARGET=%~dp0..\.."
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$repo='libkim/agent-parity'; if ($env:AGENT_PARITY_RAW) { $uri=$env:AGENT_PARITY_RAW.TrimEnd('/') + '/update.ps1' } else { $uri='https://github.com/' + $repo + '/releases/latest/download/update.ps1' }; $response=Invoke-WebRequest -UseBasicParsing -Uri $uri; $source=$response.Content; if ($source -is [byte[]]) { $source=[Text.Encoding]::UTF8.GetString($source) }; & ([scriptblock]::Create([string]$source)) update $env:AGENT_PARITY_TARGET"
-set "agent_parity_exit=%ERRORLEVEL%"
-if not "%agent_parity_exit%"=="0" (
-  if exist "%agent_parity_bin%agent-parity.cmd.new" del /q "%agent_parity_bin%agent-parity.cmd.new" >nul 2>&1
-  exit /b %agent_parity_exit%
+setlocal EnableDelayedExpansion
+rem cmd.exe normally reads a batch file as it executes it. Parse this whole
+rem block before update.ps1 stages and replaces the running launcher, so the
+rem remainder cannot be read from the newly written file at the old offset.
+(
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$repo='libkim/agent-parity'; if ($env:AGENT_PARITY_RAW) { $uri=$env:AGENT_PARITY_RAW.TrimEnd('/') + '/update.ps1' } else { $uri='https://github.com/' + $repo + '/releases/latest/download/update.ps1' }; $response=Invoke-WebRequest -UseBasicParsing -Uri $uri; $source=$response.Content; if ($source -is [byte[]]) { $source=[Text.Encoding]::UTF8.GetString($source) }; & ([scriptblock]::Create([string]$source)) update $env:AGENT_PARITY_TARGET"
+  set "agent_parity_exit=!ERRORLEVEL!"
+  if not "!agent_parity_exit!"=="0" (
+    if exist "%agent_parity_bin%agent-parity.cmd.new" del /q "%agent_parity_bin%agent-parity.cmd.new" >nul 2>&1
+    exit /b !agent_parity_exit!
+  )
+  if exist "%agent_parity_bin%agent-parity.cmd.new" (
+    move /y "%agent_parity_bin%agent-parity.cmd.new" "%agent_parity_bin%agent-parity.cmd" >nul || (del /q "%agent_parity_bin%agent-parity.cmd.new" >nul 2>&1 & exit /b 1)
+  )
+  exit /b !agent_parity_exit!
 )
-if exist "%agent_parity_bin%agent-parity.cmd.new" (
-  move /y "%agent_parity_bin%agent-parity.cmd.new" "%agent_parity_bin%agent-parity.cmd" >nul || (del /q "%agent_parity_bin%agent-parity.cmd.new" >nul 2>&1 & exit /b 1)
-)
-exit /b %agent_parity_exit%
 
 :run
 set "agent_parity_command=%~1"

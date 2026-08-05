@@ -7,6 +7,7 @@ target=$(CDPATH= cd -- "$here/../.." && pwd)
 desired=".agents/mcp/memory/run.sh"
 changed=0
 failed=0
+failure_details=""
 
 SCRIPT_DIR=$here
 TARGET=$target
@@ -15,8 +16,9 @@ platform
 
 ensure_config() {
   rel=$1
-  result=$("$editor" ensure "$target/$rel" "$desired" 2>/dev/null) || {
+  result=$("$editor" ensure "$target/$rel" "$desired" 2>&1) || {
     failed=$((failed + 1))
+    failure_details="${failure_details}\n  - $rel: $result"
     return
   }
   [ "$result" != changed ] || changed=$((changed + 1))
@@ -34,6 +36,7 @@ if ensure_local_config_editor 2>/dev/null; then
   ensure_config ".agents/mcp_config.json"
 else
   failed=$((failed + 1))
+  failure_details="${failure_details}\n  - config editor: could not download or verify the pinned editor"
 fi
 
 # The merge driver definition lives in .git/config, which git never carries,
@@ -57,7 +60,8 @@ warm=ok
 
 [ "$changed" -gt 0 ] || [ "$failed" -gt 0 ] || [ "$warm" = failed ] || exit 0
 if [ "$failed" -gt 0 ]; then
-  printf '%s\n' "agent-parity could not repair every MCP configuration. Run agent-parity status for details."
+  printf '%s\n' "agent-parity skipped $failed MCP configuration(s); edit the listed files manually:"
+  printf '%b\n' "$failure_details"
 elif [ "$changed" -gt 0 ]; then
   printf '%s\n' "agent-parity updated $changed MCP configuration(s) for this OS. Restart this agent session to load the memory tools."
 fi

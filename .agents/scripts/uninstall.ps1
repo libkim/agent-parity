@@ -28,11 +28,11 @@ $agState = Get-ManagedBlockState $text $MarkBegin $MarkEnd
 if ($agState -eq "valid") {
   $pattern = [regex]::Escape($MarkBegin) + '(?s).*?' + [regex]::Escape($MarkEnd) + "\r?\n?"
   Write-Text $ag ([regex]::Replace($text, $pattern, ""))
-  Write-Output "AGENTS.md: removed memory instruction block"
+  Write-Output "AGENTS.md: removed agent-parity instruction block"
 } elseif ($agState -eq "invalid") {
   Write-Output "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
 } elseif ($text -and $text.Contains("memory MCP server")) {
-  Write-Output "AGENTS.md: has a memory block without markers -- remove it manually"
+  Write-Output "AGENTS.md: has a legacy unmarked memory instruction -- remove it manually"
 }
 $gaText = Read-Text (Path-InTarget ".gitattributes")
 $gaState = Get-ManagedBlockState $gaText $GitIgnoreBegin $GitIgnoreEnd
@@ -46,8 +46,16 @@ if ($gaState -eq "valid") {
 }
 if (Test-GitRepo) {
   & git -C $Target config --remove-section merge.agent-parity-memory 2>$null
-  # Remove the pre-push shim only when it is ours; a user's own hook stays.
-  if (Test-PrePushHookRegistered) { Remove-Item -LiteralPath (Get-PrePushHookPath) -Force -ErrorAction SilentlyContinue }
+  # Remove the pre-push dispatcher only when it is ours; a user's own hook stays.
+  # If we had preserved their hook as pre-push.user, restore it to the entry point.
+  if (Test-PrePushHookRegistered) {
+    $hook = Get-PrePushHookPath
+    Remove-Item -LiteralPath $hook -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath "$hook.user") {
+      Move-Item -LiteralPath "$hook.user" -Destination $hook -Force
+      Write-Output "git: restored your original pre-push hook"
+    }
+  }
 }
 $gitIgnoreText = Read-Text (Path-InTarget ".gitignore")
 $gitIgnoreState = Get-ManagedBlockState $gitIgnoreText $GitIgnoreBegin $GitIgnoreEnd

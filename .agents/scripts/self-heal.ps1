@@ -7,23 +7,29 @@ $editor = $ConfigEditor
 $desired = ".agents/mcp/memory/run.cmd"
 $changed = 0
 $failed = 0
+$failureDetails = New-Object System.Collections.Generic.List[string]
 
 # Every failure below becomes a notice instead of a nonzero exit: this runs as
 # a session-start hook and Antigravity can crash the turn on nonzero, and a
 # hook that dies mid-script reports nothing -- exactly the silent outage this
 # script exists to prevent.
 $editorOk = $true
-try { Ensure-LocalConfigEditor } catch { $editorOk = $false; $failed++ }
+try { Ensure-LocalConfigEditor } catch {
+  $editorOk = $false
+  $failed++
+  $failureDetails.Add("  - config editor: $($_.Exception.Message)")
+}
 
 if ($editorOk) {
   foreach ($rel in @(".mcp.json", ".cursor/mcp.json", ".codex/config.toml", ".agents/mcp_config.json")) {
     $path = Join-Path $target ($rel.Replace('/', '\'))
     try {
-      $result = & $editor ensure $path $desired
-      if ($LASTEXITCODE -ne 0) { throw "config editor failed" }
+      $result = & $editor ensure $path $desired 2>&1
+      if ($LASTEXITCODE -ne 0) { throw (($result | Out-String).Trim()) }
       if (($result | Out-String).Trim() -eq "changed") { $changed++ }
     } catch {
       $failed++
+      $failureDetails.Add("  - $rel`: $($_.Exception.Message)")
     }
   }
 }
@@ -53,7 +59,8 @@ try {
 
 if ($changed -eq 0 -and $failed -eq 0 -and $warm -eq "ok") { exit 0 }
 if ($failed -gt 0) {
-  Write-Output "agent-parity could not repair every MCP configuration. Run agent-parity status for details."
+  Write-Output "agent-parity skipped $failed MCP configuration(s); edit the listed files manually:"
+  $failureDetails | ForEach-Object { Write-Output $_ }
 } elseif ($changed -gt 0) {
   Write-Output "agent-parity updated $changed MCP configuration(s) for this OS. Restart this agent session to load the memory tools."
 }
