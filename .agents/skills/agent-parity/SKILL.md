@@ -20,3 +20,10 @@ Commands:
 
 Run the chosen command with the shell tool and show the user its output. Always
 invoke the vendored command above; never reimplement what it does.
+
+When `status` is requested from an agent conversation, call `memory_recent` to
+verify the current session. Never infer availability from a static tool list;
+MCP tools may load lazily. If status reports healthy wiring but that call is
+unavailable, tell the user to restart the agent session. If status reports
+missing, stale, conflicting, or invalid wiring, ask whether to inspect the named
+configuration files; unrelated user-owned settings may be the actual cause.

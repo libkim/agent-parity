@@ -37,8 +37,8 @@ fi
 ag="$TARGET/AGENTS.md"
 ag_state=$(managed_block_state "$ag" "$MARK_BEGIN" "$MARK_END")
 case "$ag_state" in
-  valid) echo "AGENTS.md: memory block present" ;;
-  absent) echo "AGENTS.md: memory block missing" ;;
+  valid) echo "AGENTS.md: agent-parity instruction block present" ;;
+  absent) echo "AGENTS.md: agent-parity instruction block missing" ;;
   invalid) echo "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; repair them manually" ;;
 esac
 gi="$TARGET/.gitignore"
@@ -62,8 +62,8 @@ if in_git_repo; then
   fi
   if pre_push_hook_registered; then
     echo "  pre-push guard: registered (.git/hooks/pre-push)"
-  elif pre_push_hook_foreign; then
-    echo "  pre-push guard: your own pre-push hook is in place (not replaced)"
+  elif uses_custom_hooks_path; then
+    echo "  pre-push guard: core.hooksPath is set -- wire .agents/scripts/pre-push.sh into your hook manager"
   else
     echo "  pre-push guard: missing (a session-start hook registers it)"
   fi

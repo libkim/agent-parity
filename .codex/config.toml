@@ -1,3 +1,3 @@
 [mcp_servers.memory]
-command = ".agents/mcp/memory/run.cmd"
+command = ".agents/mcp/memory/run.sh"
 default_tools_approval_mode = "approve"

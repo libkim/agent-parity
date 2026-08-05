@@ -302,22 +302,38 @@ pre_push_hook_registered() {
   [ -e "$hook" ] && grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null
 }
 
-pre_push_hook_foreign() {
-  hook=$(pre_push_hook_path) || return 1
-  [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null
+# True when a hook manager (husky and similar) owns the hook dir through
+# core.hooksPath; agent-parity does not inject there and the user wires the
+# guard in themselves.
+uses_custom_hooks_path() {
+  git -C "$TARGET" config --get core.hooksPath >/dev/null 2>&1
 }
 
-# Write our shim only when there is no hook, or the existing one is ours; a
-# user's own pre-push hook is left untouched.
+# Self-heal path: re-establish the dispatcher on a fresh clone (.git/hooks is
+# never carried by git). Silent and non-invasive -- it only writes when the
+# entry point is empty or already ours, and never moves a user's own hook.
+# Absorbing a pre-existing hook (rename to pre-push.user) is done only by the
+# explicit install/update, not here. If the entry point holds a foreign hook,
+# or a hook manager owns the dir via core.hooksPath, we leave it alone.
 reg_pre_push_hook() {
   in_git_repo || return 0
+  ! uses_custom_hooks_path || return 0
   hook=$(pre_push_hook_path) || return 0
-  ! pre_push_hook_foreign || return 0
+  if [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null; then
+    return 0
+  fi
   mkdir -p "$(dirname "$hook")"
   cat > "$hook" <<EOF
 #!/bin/sh
 $PRE_PUSH_MARKER
-exec "\$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh" "\$@"
+top=\$(git rev-parse --show-toplevel)
+input=\$(cat)
+status=0
+for sub in "\$top/.agents/scripts/pre-push.sh" "\$0.user"; do
+  [ -x "\$sub" ] || continue
+  printf '%s' "\$input" | "\$sub" "\$@" || status=1
+done
+exit \$status
 EOF
   chmod +x "$hook"
 }
@@ -384,14 +400,14 @@ status_skills() {
     fi
   done
   CONFIG_EDITOR=$(local_config_editor_path) || CONFIG_EDITOR=""
-  if [ -x "$CONFIG_EDITOR" ] && "$CONFIG_EDITOR" has-sync-hook "$TARGET/$CLAUDE_SRC" "$CLAUDE_HOOK" 2>/dev/null; then
-    echo "  hook: registered ($CLAUDE_SRC)"
-  elif [ -x "$CONFIG_EDITOR" ] && "$CONFIG_EDITOR" has-sync-hook "$TARGET/$CLAUDE_TGT" "$CLAUDE_HOOK" 2>/dev/null; then
-    echo "  hook: registered ($CLAUDE_TGT)"
+  if [ -x "$CONFIG_EDITOR" ] && "$CONFIG_EDITOR" has-claude-settings "$TARGET/$CLAUDE_SRC" "$CLAUDE_HOOK" 2>/dev/null; then
+    echo "  Claude settings: converged ($CLAUDE_SRC)"
+  elif [ -x "$CONFIG_EDITOR" ] && "$CONFIG_EDITOR" has-claude-settings "$TARGET/$CLAUDE_TGT" "$CLAUDE_HOOK" 2>/dev/null; then
+    echo "  Claude settings: converged ($CLAUDE_TGT)"
   elif [ ! -x "$CONFIG_EDITOR" ]; then
-    echo "  hook: unknown (local config editor missing)"
+    echo "  Claude settings: unknown (local config editor missing)"
   else
-    echo "  hook: missing -- Claude Code will not auto-sync skills"
+    echo "  Claude settings: missing, stale, or invalid -- inspect the reported file"
   fi
 }
 
@@ -444,6 +460,18 @@ unreg_claude_wrapper() {
 }
 
 
+is_managed_memory_command() {
+  case $(printf '%s' "$1" | tr '\\' '/') in
+    .agents/mcp/memory/run.sh|.agents/mcp/memory/run.cmd|\
+    .agents/mcp/memory/dist/memory-mcp-linux-amd64|\
+    .agents/mcp/memory/dist/memory-mcp-linux-arm64|\
+    .agents/mcp/memory/dist/memory-mcp-darwin-amd64|\
+    .agents/mcp/memory/dist/memory-mcp-darwin-arm64|\
+    .agents/mcp/memory/dist/memory-mcp-windows-amd64.exe) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 status_mcp_registration() {
   label=$1
   rel=$2
@@ -457,14 +485,20 @@ status_mcp_registration() {
       echo "  $label: unknown (local config editor missing)"
       return
     fi
+	if "$CONFIG_EDITOR" has-memory-config "$t" "$marker" 2>/dev/null; then
+	  echo "  $label: registered ($rel)"
+	  return
+	fi
     command=$("$CONFIG_EDITOR" command "$t" 2>/dev/null) || code=$?
     code=${code:-0}
     if [ "$code" -eq 0 ] && [ "$command" = "$marker" ]; then
-      echo "  $label: registered ($rel)"
+      echo "  $label: stale managed settings ($rel)"
     elif [ "$code" -eq 0 ] && [ "$command" = ".agents/mcp/memory/run.cmd" ]; then
-      echo "  $label: registered for Windows ($rel; self-heal will retarget it when the next session starts)"
+      echo "  $label: registered for Windows but not converged ($rel; self-heal will retarget it when the next session starts)"
+	elif [ "$code" -eq 0 ] && is_managed_memory_command "$command"; then
+	  echo "  $label: stale managed settings ($rel)"
     elif [ "$code" -eq 0 ]; then
-      echo "  $label: points elsewhere ($rel has a memory entry not using $SERVER_DIR)"
+	  echo "  $label: points elsewhere ($rel has a memory entry not owned by agent-parity; edit it manually)"
     elif [ "$code" -eq 1 ]; then
       echo "  $label: not registered ($rel)"
     else

@@ -284,20 +284,33 @@ function Test-PrePushHookRegistered {
   return ($hook -and (Test-Path -LiteralPath $hook) -and ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*"))
 }
 
-function Test-PrePushHookForeign {
-  $hook = Get-PrePushHookPath
-  return ($hook -and (Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*"))
+function Test-CustomHooksPath {
+  & git -C $Target config --get core.hooksPath *> $null
+  return ($LASTEXITCODE -eq 0)
 }
 
-# Write our shim only when there is no hook, or the existing one is ours; a
-# user's own pre-push hook is left untouched. Write-Text keeps the LF newlines
-# git needs to run the hook.
+# Self-heal path: re-establish the dispatcher on a fresh clone (.git/hooks is
+# never carried by git). Silent and non-invasive -- writes only when the entry
+# point is empty or already ours, and never moves a user's own hook. Absorbing a
+# pre-existing hook (rename to pre-push.user) is done only by explicit
+# install/update. Write-Text keeps the LF newlines git needs to run the hook.
 function Register-PrePushHook {
   if (!(Test-GitRepo)) { return }
+  if (Test-CustomHooksPath) { return }
   $hook = Get-PrePushHookPath
   if (!$hook) { return }
-  if (Test-PrePushHookForeign) { return }
-  $body = "#!/bin/sh`n" + $PrePushMarker + "`nexec `"`$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh`" `"`$@`"`n"
+  if ((Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*")) {
+    return
+  }
+  $body = "#!/bin/sh`n" + $PrePushMarker + "`n" +
+    "top=`$(git rev-parse --show-toplevel)`n" +
+    "input=`$(cat)`n" +
+    "status=0`n" +
+    "for sub in `"`$top/.agents/scripts/pre-push.sh`" `"`$0.user`"; do`n" +
+    "  [ -x `"`$sub`" ] || continue`n" +
+    "  printf '%s' `"`$input`" | `"`$sub`" `"`$@`" || status=1`n" +
+    "done`n" +
+    "exit `$status`n"
   Write-Text $hook $body
 }
 
@@ -348,13 +361,13 @@ function Status-Skills {
     }
   }
   if (!(Test-Path -LiteralPath $ConfigEditor -PathType Leaf)) { Write-Output "  hook: unknown (local config editor missing)"; return }
-  & $ConfigEditor has-sync-hook (Path-InTarget $ClaudeSrc) $ClaudeHook 2>$null
+  & $ConfigEditor has-claude-settings (Path-InTarget $ClaudeSrc) $ClaudeHook 2>$null
   $srcCode = $LASTEXITCODE
-  & $ConfigEditor has-sync-hook (Path-InTarget $ClaudeTgt) $ClaudeHook 2>$null
+  & $ConfigEditor has-claude-settings (Path-InTarget $ClaudeTgt) $ClaudeHook 2>$null
   $tgtCode = $LASTEXITCODE
-  if ($srcCode -eq 0) { Write-Output "  hook: registered ($ClaudeSrc)" }
-  elseif ($tgtCode -eq 0) { Write-Output "  hook: registered ($ClaudeTgt)" }
-  else { Write-Output "  hook: missing -- Claude Code will not auto-sync skills" }
+	if ($srcCode -eq 0) { Write-Output "  Claude settings: converged ($ClaudeSrc)" }
+	elseif ($tgtCode -eq 0) { Write-Output "  Claude settings: converged ($ClaudeTgt)" }
+	else { Write-Output "  Claude settings: missing, stale, or invalid -- inspect the reported file" }
 }
 
 function Status-CodexMcp {
@@ -419,19 +432,35 @@ function Status-McpRegistration([string]$Label, [string]$Rel, [string]$Marker) {
   $t = Path-InTarget $Rel
   $text = Read-Text $t
   if ($null -eq $text) { Write-Output "  ${Label}: config missing ($Rel)" }
-  elseif ($Marker -eq $Launcher) {
-    if (!(Test-Path -LiteralPath $ConfigEditor -PathType Leaf)) { Write-Output "  ${Label}: unknown (local config editor missing)"; return }
-    $command = & $ConfigEditor command $t 2>$null
+	  elseif ($Marker -eq $Launcher) {
+	    if (!(Test-Path -LiteralPath $ConfigEditor -PathType Leaf)) { Write-Output "  ${Label}: unknown (local config editor missing)"; return }
+	    & $ConfigEditor has-memory-config $t $Marker 2>$null
+	    if ($LASTEXITCODE -eq 0) { Write-Output "  ${Label}: registered ($Rel)"; return }
+	    $command = & $ConfigEditor command $t 2>$null
     $code = $LASTEXITCODE
     $command = ($command | Out-String).Trim()
-    if ($code -eq 0 -and $command -eq $Marker) { Write-Output "  ${Label}: registered ($Rel)" }
-    elseif ($code -eq 0 -and $command -eq $OtherLauncher) { Write-Output "  ${Label}: registered for Unix ($Rel; self-heal will retarget it when the next session starts)" }
-    elseif ($code -eq 0) { Write-Output "  ${Label}: points elsewhere ($Rel has a memory entry not using $ServerDir)" }
+	    if ($code -eq 0 -and $command -eq $Marker) { Write-Output "  ${Label}: stale managed settings ($Rel)" }
+	    elseif ($code -eq 0 -and $command -eq $OtherLauncher) { Write-Output "  ${Label}: registered for Unix but not converged ($Rel; self-heal will retarget it when the next session starts)" }
+	    elseif ($code -eq 0 -and (Test-ManagedMemoryCommand $command)) { Write-Output "  ${Label}: stale managed settings ($Rel)" }
+	    elseif ($code -eq 0) { Write-Output "  ${Label}: points elsewhere ($Rel has a memory entry not owned by agent-parity; edit it manually)" }
     elseif ($code -eq 1) { Write-Output "  ${Label}: not registered ($Rel)" }
     else { Write-Output "  ${Label}: invalid JSON/TOML ($Rel)" }
   } else {
     Write-Output "  ${Label}: not registered ($Rel)"
   }
+}
+
+function Test-ManagedMemoryCommand([string]$Command) {
+  $normalized = $Command.Trim().Replace("\", "/")
+  return $normalized -in @(
+    ".agents/mcp/memory/run.sh",
+    ".agents/mcp/memory/run.cmd",
+    ".agents/mcp/memory/dist/memory-mcp-linux-amd64",
+    ".agents/mcp/memory/dist/memory-mcp-linux-arm64",
+    ".agents/mcp/memory/dist/memory-mcp-darwin-amd64",
+    ".agents/mcp/memory/dist/memory-mcp-darwin-arm64",
+    ".agents/mcp/memory/dist/memory-mcp-windows-amd64.exe"
+  )
 }
 
 function Status-McpRegistrations {

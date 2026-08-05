@@ -36,11 +36,11 @@ if [ "$ag_state" = valid ]; then
     !inblock { print }
   ' "$ag" > "$LOCAL_TEMP_FILE"
   commit_local_temp "$ag"
-  echo "AGENTS.md: removed memory instruction block"
+  echo "AGENTS.md: removed agent-parity instruction block"
 elif [ "$ag_state" = invalid ]; then
   echo "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
 elif [ -e "$ag" ] && grep -q "memory MCP server" "$ag" 2>/dev/null; then
-  echo "AGENTS.md: has a memory block without markers -- remove it manually"
+  echo "AGENTS.md: has a legacy unmarked memory instruction -- remove it manually"
 fi
 ga="$TARGET/.gitattributes"
 ga_state=$(managed_block_state "$ga" "$GI_BEGIN" "$GI_END")
@@ -53,9 +53,15 @@ elif [ "$ga_state" = invalid ]; then
 fi
 if in_git_repo; then
   git -C "$TARGET" config --remove-section merge.agent-parity-memory 2>/dev/null || true
-  # Remove the pre-push shim only when it is ours; a user's own hook stays.
+  # Remove the pre-push dispatcher only when it is ours; a user's own hook stays.
+  # If we had preserved their hook as pre-push.user, restore it to the entry point.
   if pre_push_hook_registered; then
-    rm -f "$(pre_push_hook_path)"
+    hook=$(pre_push_hook_path)
+    rm -f "$hook"
+    if [ -e "$hook.user" ]; then
+      mv "$hook.user" "$hook"
+      echo "git: restored your original pre-push hook"
+    fi
   fi
 fi
 gi="$TARGET/.gitignore"

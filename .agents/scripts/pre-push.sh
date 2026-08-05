@@ -6,7 +6,7 @@
 # uncommitted, so a new memory or a wiring change is never left behind on the
 # machines that pull this repo. git's own ignore rules decide what counts:
 # generated copies (.claude/skills, the binary cache) are ignored, so only files
-# meant to be committed ever surface here. Bypass once with `git push --no-verify`.
+# meant to be committed ever surface here.
 set -eu
 
 top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
@@ -30,6 +30,5 @@ echo "agent-parity: refusing to push -- these managed files are uncommitted:" >&
 printf '%s\n' "$dirty" | sed 's/^/  /' >&2
 echo >&2
 echo "They carry the shared memory and cross-agent wiring, so other machines need" >&2
-echo "them committed. Commit them and push again, or run 'git push --no-verify' to" >&2
-echo "bypass this check once." >&2
+echo "them committed. Commit every listed managed file, then push again." >&2
 exit 1
