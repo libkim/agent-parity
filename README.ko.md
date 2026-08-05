@@ -144,10 +144,13 @@ CLI `status` 자체는 이미 실행 중인 에이전트 세션을 들여다보�
 
 ### git pre-push 훅
 
-agent-parity는 관리 대상 파일이 미커밋인 상태의 push를 막는 `pre-push` 훅을 설치해, 크로스 머신 공유가 조용히 깨지지 않게 합니다. git은 이벤트당 훅을 하나만 실행하므로 이 훅은 디스패처이고, 그래서 사용자가 자신의 pre-push 훅을 추가하는 방법이 달라집니다:
+agent-parity는 `.agents/scripts/pre-push.sh`를 실행하는 `pre-push` 훅을 설치합니다. 이 스크립트는 관리 대상 파일이 미커밋인 상태의 push를 막아, 크로스 머신 공유가 조용히 깨지지 않게 합니다. git은 이벤트당 훅을 하나만 실행하므로, 이 훅은 `.git/hooks/pre-push`가 비어 있거나 이미 우리 것일 때만 설치됩니다.
 
-- **자신의 훅은 `.git/hooks/pre-push.user`에 두세요**(실행 권한 부여). 디스패처가 가드와 함께 실행하고, 둘 중 하나라도 실패하면 push를 막습니다. `.git/hooks/pre-push` 자체는 덮어쓰지 마세요. 그게 디스패처입니다. 설치 시점에 기존 훅이 있으면 자동으로 `pre-push.user`로 옮겨지고, `uninstall`이 원위치로 되돌립니다.
-- **`core.hooksPath`로 훅 매니저(예: husky)가 훅을 관리하는 경우**, agent-parity는 그 디렉터리에 아예 설치하지 않습니다. 사용자가 자신의 훅에서 `.agents/scripts/pre-push.sh "$@"`를 호출해 가드를 유지하세요.
+진입점을 이미 다른 훅이 차지하고 있으면 agent-parity는 그것을 건드리지 않고 감싸려 하지도 않습니다. 그 경우 가드 연결은 사용자 몫입니다:
+
+- **이미 자신의 `pre-push` 훅이 있으면**, 그 훅에 `.agents/scripts/pre-push.sh`를 실행하는 줄을 추가하세요. agent-parity는 사용자 훅을 rename·체이닝·덮어쓰기 하지 않습니다.
+- **agent-parity가 훅을 설치한 뒤 자신의 검사를 넣고 싶으면**, 자신의 pre-push 훅에 `.agents/scripts/pre-push.sh`를 실행하는 줄을 추가하고 그 훅을 `.git/hooks/pre-push`에 두세요. 그러면 agent-parity가 건드리지 않습니다. agent-parity가 설치한 훅을 직접 수정하지는 마세요. install·update가 재생성하고 uninstall이 제거합니다.
+- **husky처럼 훅 매니저가 `core.hooksPath`로 훅을 관리하는 경우**, agent-parity는 그 디렉터리에 등록하지 않습니다. `.agents/scripts/pre-push.sh`를 매니저의 pre-push 단계로 추가하세요(husky라면 `.husky/pre-push`에).
 
 ### 주의사항
 

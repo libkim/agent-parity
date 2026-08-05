@@ -167,19 +167,25 @@ inspection according to the reported wiring state.
 
 ### Git pre-push hooks
 
-agent-parity installs a `pre-push` hook that blocks a push while any managed
-file is uncommitted, so cross-machine sharing does not silently break. Because
-git runs only one hook per event, that hook is a dispatcher, which changes how
-you add a pre-push hook of your own:
+agent-parity installs a `pre-push` hook that runs `.agents/scripts/pre-push.sh`,
+which blocks a push while any managed file is uncommitted, so cross-machine
+sharing does not silently break. git runs only one hook per event, so the hook
+is installed only when `.git/hooks/pre-push` is empty or already ours.
 
-- **Put your hook at `.git/hooks/pre-push.user`** (make it executable). The
-  dispatcher runs it alongside the guard and fails the push if either fails. Do
-  not overwrite `.git/hooks/pre-push` itself. That is the dispatcher. An
-  existing hook found at install time is moved to `pre-push.user` for you, and
-  `uninstall` moves it back.
-- **If a hook manager owns your hooks through `core.hooksPath`** (for example
-  husky), agent-parity does not install into that directory at all. Call
-  `.agents/scripts/pre-push.sh "$@"` from your own hook to keep the guard.
+If a hook already owns that entry point, agent-parity leaves it alone and does
+not try to wrap it. Wiring the guard in is then up to you:
+
+- **If you already have your own `pre-push` hook**, add a line that runs
+  `.agents/scripts/pre-push.sh` to it. agent-parity does not rename, chain, or
+  overwrite your hook.
+- **If agent-parity installed the hook and you now want your own checks**, add a
+  line that runs `.agents/scripts/pre-push.sh` to your own pre-push hook and put
+  that hook at `.git/hooks/pre-push`; agent-parity then leaves it alone. Do not
+  edit the hook agent-parity installed, since install and update regenerate it
+  and uninstall removes it.
+- **If a hook manager such as husky owns your hooks through `core.hooksPath`**,
+  agent-parity does not register into that directory. Add `.agents/scripts/pre-push.sh`
+  as one of the manager's pre-push steps (for husky, in `.husky/pre-push`).
 
 ### Caution
 
