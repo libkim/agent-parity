@@ -9,7 +9,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.gif">
-    <img src="assets/demo-light.gif" alt="One environment, every agent — memory and skills added in one agent are committed to the repo and shared across Claude Code, Codex, Cursor, and Antigravity" width="820">
+    <img src="assets/demo-light.gif" alt="One environment, every agent: memory and skills added in one agent are committed to the repo and shared across Claude Code, Codex, Cursor, and Antigravity" width="820">
   </picture>
 </p>
 
@@ -25,13 +25,10 @@ the same skills and instructions (`AGENTS.md`).
 - **Dependency-free**: no package manager to set up and no packages to install.
   The shared environment is plain files in your repo, and the helpers ship as
   small native binaries.
-- **Non-invasive**: changes project settings only and never
-  edits global agent settings. Release executables live in a per-user cache
-  shared across projects.
-- **Zero-install**: commit the installed wiring once and a fresh machine needs
-  no install or update command. The first agent session automatically downloads
-  and verifies the current platform executables; after a cross-OS repair, only
-  an agent-session restart is needed.
+- **Non-invasive**: changes project settings only, never global agent settings,
+  and merges just its own entries so your other settings stay intact.
+- **Zero-install**: commit the wiring once, and a fresh clone needs no install
+  or update command. The setup activates on the next agent session.
 
 ## Supported agents (tested 2026-07-10)
 
@@ -172,12 +169,12 @@ inspection according to the reported wiring state.
 
 agent-parity installs a `pre-push` hook that blocks a push while any managed
 file is uncommitted, so cross-machine sharing does not silently break. Because
-git runs only one hook per event, that hook is a dispatcher — which changes how
+git runs only one hook per event, that hook is a dispatcher, which changes how
 you add a pre-push hook of your own:
 
 - **Put your hook at `.git/hooks/pre-push.user`** (make it executable). The
   dispatcher runs it alongside the guard and fails the push if either fails. Do
-  not overwrite `.git/hooks/pre-push` itself — that is the dispatcher. An
+  not overwrite `.git/hooks/pre-push` itself. That is the dispatcher. An
   existing hook found at install time is moved to `pre-push.user` for you, and
   `uninstall` moves it back.
 - **If a hook manager owns your hooks through `core.hooksPath`** (for example
@@ -302,8 +299,8 @@ local.
 Installation also writes its own skills into this source: `agent-parity` (the
 management commands), plus the authoring skills `write-requirement` (turn a
 request into a testable requirement) and `write-governance` (write a standing
-project rule). Like the launchers, these are regenerated on `update` — edit your
-own skills, not these.
+project rule). Like the launchers, these are regenerated on `update`, so edit
+your own skills, not these.
 
 ## Files the install creates
 
