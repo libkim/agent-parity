@@ -411,33 +411,25 @@ reg_merge_driver() {
   echo "git: memory merge driver registered (.git/config)"
 }
 
-# .git/hooks is never carried by git, so install (and self-heal on a fresh clone)
-# registers the pre-push guard. git runs a file named exactly "pre-push", and we
-# own that entry point only when it is empty or already ours; the installed hook
-# just runs the tracked guard in .agents. If anything else owns the entry point,
-# a user's own hook or a hook manager through core.hooksPath, we leave it alone
-# and tell the user to call the guard from their hook. We do not detect or wrap a
-# hook manager: managers that regenerate .git/hooks would overwrite us or run a
-# duplicated copy, and a static user hook cannot be told apart from a regenerated
-# one.
+# The pre-push entry point is a file named exactly "pre-push" in git's active
+# hooks dir. rev-parse --git-path hooks already resolves core.hooksPath, so this
+# points at .husky/pre-push under husky and .git/hooks/pre-push otherwise. We own
+# that entry point only when it is empty or already ours; the installed hook just
+# runs the tracked guard in .agents. If any other hook already sits there, a
+# user's own hook or a hook manager's, we leave it alone and tell the user to
+# call the guard from it. We do not detect or wrap a hook manager: whether a hook
+# is there is all that matters, and a static user hook cannot be told apart from
+# a regenerated one anyway.
 pre_push_hook_path() {
   hp=$(git -C "$TARGET" rev-parse --git-path hooks 2>/dev/null) || return 1
   case "$hp" in /*) echo "$hp/pre-push" ;; *) echo "$TARGET/$hp/pre-push" ;; esac
 }
 
-uses_custom_hooks_path() {
-  git -C "$TARGET" config --get core.hooksPath >/dev/null 2>&1
-}
-
 reg_pre_push_hook() {
   in_git_repo || return 0
-  if uses_custom_hooks_path; then
-    echo "git: core.hooksPath is set (a hook manager owns your hooks) -- call .agents/scripts/pre-push.sh from your pre-push hook to guard managed files"
-    return 0
-  fi
   hook=$(pre_push_hook_path) || return 0
   if [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null; then
-    echo "git: your own pre-push hook is in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
+    echo "git: a pre-push hook is already in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
     return 0
   fi
   mkdir -p "$(dirname "$hook")"

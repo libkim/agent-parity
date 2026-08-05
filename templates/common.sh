@@ -302,21 +302,13 @@ pre_push_hook_registered() {
   [ -e "$hook" ] && grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null
 }
 
-# True when a hook manager (husky and similar) owns the hook dir through
-# core.hooksPath; agent-parity does not inject there and the user wires the
-# guard in themselves.
-uses_custom_hooks_path() {
-  git -C "$TARGET" config --get core.hooksPath >/dev/null 2>&1
-}
-
 # Self-heal path: re-establish the pre-push guard on a fresh clone (.git/hooks is
 # never carried by git). Silent and non-invasive: it writes only when the entry
-# point is empty or already ours, and leaves a foreign hook or a core.hooksPath
-# manager alone. Wiring the guard into someone else's hook is the user's job
-# reported by install/update, not self-heal's.
+# point is empty or already ours, and leaves any other hook alone. Wiring the
+# guard into someone else's hook is the user's job reported by install/update,
+# not self-heal's.
 reg_pre_push_hook() {
   in_git_repo || return 0
-  ! uses_custom_hooks_path || return 0
   hook=$(pre_push_hook_path) || return 0
   if [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null; then
     return 0

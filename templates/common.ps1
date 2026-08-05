@@ -284,18 +284,12 @@ function Test-PrePushHookRegistered {
   return ($hook -and (Test-Path -LiteralPath $hook) -and ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*"))
 }
 
-function Test-CustomHooksPath {
-  & git -C $Target config --get core.hooksPath *> $null
-  return ($LASTEXITCODE -eq 0)
-}
-
 # Self-heal path: re-establish the pre-push guard on a fresh clone (.git/hooks is
 # never carried by git). Silent and non-invasive -- writes only when the entry
-# point is empty or already ours, and leaves a foreign hook or a core.hooksPath
-# manager alone. Write-Text keeps the LF newlines git needs to run the hook.
+# point is empty or already ours, and leaves any other hook alone. Write-Text
+# keeps the LF newlines git needs to run the hook.
 function Register-PrePushHook {
   if (!(Test-GitRepo)) { return }
-  if (Test-CustomHooksPath) { return }
   $hook = Get-PrePushHookPath
   if (!$hook) { return }
   if ((Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*")) {

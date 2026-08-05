@@ -3,11 +3,11 @@ param(
   [string]$Version = "v9.8.7"
 )
 
-# The PowerShell install path (Reg-PrePushHook) installs .git/hooks/pre-push only
-# when the entry point is empty or already ours; the hook just runs the tracked
-# guard. A pre-existing user hook and a core.hooksPath manager are left untouched,
-# with a message telling the user to wire the guard in. The unix test
-# (test_pre_push.sh) covers the shell installer; this covers the ps1 one.
+# The PowerShell install path (Reg-PrePushHook) installs the pre-push guard at
+# git's active entry point (.git/hooks or the core.hooksPath dir) only when it is
+# empty or already ours; the hook just runs the tracked guard. Any pre-existing
+# hook there is left untouched, with a message telling the user to wire the guard
+# in. The unix test (test_pre_push.sh) covers the shell installer; this the ps1.
 $ErrorActionPreference = "Stop"
 $testRepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $dist = Join-Path $testRepoRoot "dist"
@@ -81,20 +81,34 @@ try {
   if (![IO.File]::ReadAllText($hook2).Contains("MINE-RAN")) { throw "install clobbered the user's pre-push hook" }
   if ([IO.File]::ReadAllText($hook2).Contains($marker)) { throw "install overwrote the user hook with ours" }
   if (Test-Path -LiteralPath "$hook2.user") { throw "install created pre-push.user (should not rename)" }
-  if (($out2 -join "`n") -notmatch "your own pre-push hook is in place") { throw "install did not report the user hook" }
+  if (($out2 -join "`n") -notmatch "a pre-push hook is already in place") { throw "install did not report the user hook" }
   # uninstall leaves the user's own hook alone.
   & (Join-Path $r2 ".agents\bin\agent-parity.cmd") uninstall *> $null
   if (![IO.File]::ReadAllText($hook2).Contains("MINE-RAN")) { throw "uninstall removed the user's own pre-push hook" }
 
-  # 3) core.hooksPath set (a hook manager owns the dir): install does not touch it.
+  # 3) core.hooksPath relocates the entry point. With no pre-push there yet,
+  # install writes the guard into that dir, not .git/hooks.
   $r3 = New-TestRepo; $roots += $r3
   New-Item -ItemType Directory -Force -Path (Join-Path $r3 ".husky") | Out-Null
   & git -C $r3 config core.hooksPath .husky
   Invoke-Install -Root $r3 | Out-Null
+  $hook3 = Join-Path $r3 ".husky\pre-push"
+  if (!(Test-Path -LiteralPath $hook3 -PathType Leaf)) { throw "install did not write the guard into the core.hooksPath dir" }
+  if (![IO.File]::ReadAllText($hook3).Contains($marker)) { throw "core.hooksPath guard missing the marker" }
   if (Test-Path -LiteralPath (Join-Path $r3 ".git\hooks\pre-push")) { throw "install wrote into .git/hooks despite core.hooksPath" }
-  if (Get-ChildItem -LiteralPath (Join-Path $r3 ".husky") -ErrorAction SilentlyContinue) { throw "install wrote into the hook manager's dir" }
 
-  Write-Output "pre-push (PowerShell path): guard install, user-hook left alone, core.hooksPath deferral: OK"
+  # 4) A hook already at the core.hooksPath entry point is left alone.
+  $r4 = New-TestRepo; $roots += $r4
+  New-Item -ItemType Directory -Force -Path (Join-Path $r4 ".husky") | Out-Null
+  & git -C $r4 config core.hooksPath .husky
+  $hook4 = Join-Path $r4 ".husky\pre-push"
+  [IO.File]::WriteAllText($hook4, "#!/bin/sh`necho HUSKY-RAN`n")
+  $out4 = Invoke-Install -Root $r4
+  if (![IO.File]::ReadAllText($hook4).Contains("HUSKY-RAN")) { throw "install clobbered the core.hooksPath hook" }
+  if ([IO.File]::ReadAllText($hook4).Contains($marker)) { throw "install overwrote the core.hooksPath hook" }
+  if (($out4 -join "`n") -notmatch "a pre-push hook is already in place") { throw "install did not report the existing core.hooksPath hook" }
+
+  Write-Output "pre-push (PowerShell path): guard install following core.hooksPath, pre-existing hook left alone: OK"
 } finally {
   $env:AGENT_PARITY_RAW = $oldRaw
   $env:AGENT_PARITY_RELEASE = $oldRelease
