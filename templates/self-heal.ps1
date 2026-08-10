@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $target = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 . (Join-Path $PSScriptRoot "common.ps1") -Target $target
 $editor = $ConfigEditor
-$desired = ".agents/mcp/memory/run.cmd"
+$desired = ".agent-parity/mcp/memory/run.cmd"
 $changed = 0
 $failed = 0
 $failureDetails = New-Object System.Collections.Generic.List[string]
@@ -51,7 +51,7 @@ try {
 # cache never turns into a silent memory outage.
 $warm = "ok"
 try {
-  & (Join-Path $target ".agents\mcp\memory\run.cmd") prewarm *> $null
+  & (Join-Path $target ".agent-parity\mcp\memory\run.cmd") prewarm *> $null
   if ($LASTEXITCODE -ne 0) { $warm = "failed" }
 } catch {
   $warm = "failed"

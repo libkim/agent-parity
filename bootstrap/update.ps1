@@ -43,16 +43,16 @@ $PackagedVersion = "dev"
 $Raw = $env:AGENT_PARITY_RAW
 $Release = $env:AGENT_PARITY_RELEASE
 $Version = $env:AGENT_PARITY_VERSION
-$ServerDir = ".agents/mcp/memory"
-$StoreDir = ".agents/memory"
-$ProjectCliDir = ".agents/bin"
-$SyncScript = ".agents/scripts/sync-claude.ps1"
+$ServerDir = ".agent-parity/mcp/memory"
+$StoreDir = ".agent-parity/memory"
+$ProjectCliDir = ".agent-parity/bin"
+$SyncScript = ".agent-parity/scripts/sync-claude.ps1"
 $CursorCli = ".cursor/cli.json"
-$ClaudeSrc = ".agents/claude/settings.json"
+$ClaudeSrc = ".agent-parity/claude/settings.json"
 $ClaudeTgt = ".claude/settings.json"
 # SessionStart runs through the project-local launcher. Claude chooses the host
 # shell; the launcher absorbs the Unix/Windows difference.
-$ClaudeHook = '.agents/bin/agent-parity sync-claude'
+$ClaudeHook = '.agent-parity/bin/agent-parity sync-claude'
 $MarkBegin = "<!-- agent-parity:begin -->"
 $MarkEnd = "<!-- agent-parity:end -->"
 $GitIgnoreBegin = "# agent-parity:begin"
@@ -60,22 +60,21 @@ $GitIgnoreEnd = "# agent-parity:end"
 # Memory files rarely change after creation, but an explicit edit on both
 # sides can conflict; a bundled git merge driver unions tags and resolves a
 # one-sided body edit instead of leaving conflict markers to the user.
-$MergeDriverCmd = '.agents/scripts/merge-memory.sh %O %A %B'
-$GaLine = ".agents/memory/*.md merge=agent-parity-memory"
+$MergeDriverCmd = '.agent-parity/scripts/merge-memory.sh %O %A %B'
+$GaLine = ".agent-parity/memory/*.md merge=agent-parity-memory"
 $PrePushMarker = '# agent-parity managed pre-push hook'
-$Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", "AGENTS.md", "CLAUDE.md")
+$Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", ".agent-parity", "AGENTS.md", "CLAUDE.md")
 # Manifest diff: everything older supported releases created that the current
 # release no longer manages -- the union of their manifests minus the current
 # one. install/update remove these after converging; drop an entry only when
 # the support floor rises past the release that retired it.
-#   retired in v0.6.0: vendored binaries, replaced by the per-version cache
-#   retired in v0.6.0: the PowerShell CLI entry, folded into agent-parity.cmd
-$Tombstones = @(".agents/mcp/memory/dist", ".agents/bin/agent-parity.ps1")
+#   retired in v0.9.0: the .agents/ tooling dirs, moved under .agent-parity/
+$Tombstones = @(".agents/mcp", ".agents/bin", ".agents/scripts", ".agents/claude")
 $ParityBreakers = @(
   @{ File = ".cursorrules"; Who = "Cursor" }
 )
-$Launcher = ".agents/mcp/memory/run.cmd"
-$OtherLauncher = ".agents/mcp/memory/run.sh"
+$Launcher = ".agent-parity/mcp/memory/run.cmd"
+$OtherLauncher = ".agent-parity/mcp/memory/run.sh"
 
 if (!(Test-Path -LiteralPath $Target -PathType Container)) { throw "no such directory: $Target" }
 $Target=(Resolve-Path -LiteralPath $Target).Path
@@ -156,7 +155,7 @@ function Download-File([string]$Url, [string]$Path) {
 
 function Install-ProjectCli {
   $d = Path-InTarget $ProjectCliDir
-  $s = Path-InTarget ".agents/scripts"
+  $s = Path-InTarget ".agent-parity/scripts"
   New-Item -ItemType Directory -Force -Path $d | Out-Null
   New-Item -ItemType Directory -Force -Path $s | Out-Null
   foreach ($name in @("common.ps1", "status.ps1", "version.ps1", "uninstall.ps1", "sync-claude.ps1", "self-heal.ps1")) {
@@ -226,6 +225,23 @@ function Remove-Tombstones {
       Write-Output "legacy: removed $tombstone"
     }
   }
+}
+
+# The memory store holds user data, so a pre-v0.9.0 store (.agents/memory) is
+# moved into the new location, never deleted and recreated.
+function Migrate-Store {
+  $old = Path-InTarget ".agents/memory"
+  $new = Path-InTarget $StoreDir
+  if (!(Test-Path -LiteralPath $old -PathType Container)) { return }
+  if ($old -eq $new) { return }
+  New-Item -ItemType Directory -Force -Path $new | Out-Null
+  $moved = 0
+  foreach ($f in Get-ChildItem -LiteralPath $old -Filter *.md -File -ErrorAction SilentlyContinue) {
+    $dest = Join-Path $new $f.Name
+    if (!(Test-Path -LiteralPath $dest)) { Move-Item -LiteralPath $f.FullName -Destination $dest; $moved++ }
+  }
+  if (!(Get-ChildItem -LiteralPath $old -Force -ErrorAction SilentlyContinue)) { Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue }
+  if ($moved -gt 0) { Write-Output "memory store: migrated $moved file(s) to $StoreDir" }
 }
 
 # Other versions' caches are re-downloadable derivatives, so pruning cannot
@@ -298,7 +314,7 @@ function Reg-McpConfig([string]$Rel, [string]$Template, [string]$Marker) {
     $code = $call.ExitCode
     if ($code -eq 0) {
       $currentText = ($current | Out-String).Trim()
-      if ($currentText -in @(".agents/mcp/memory/run.sh", ".agents/mcp/memory/run.cmd")) {
+      if ($currentText -in @(".agent-parity/mcp/memory/run.sh", ".agent-parity/mcp/memory/run.cmd", ".agents/mcp/memory/run.sh", ".agents/mcp/memory/run.cmd")) {
         $call = Invoke-ConfigEditor ensure $t $Launcher
         $result = $call.Output
         if ($call.ExitCode -ne 0) {
@@ -494,13 +510,13 @@ function Reg-PrePushHook {
   # only when it is empty or already ours. Any other hook, a user's or a hook
   # manager's, is left alone; wiring the guard in is then the user's job.
   if ((Test-Path -LiteralPath $hook) -and -not ((Get-Content -LiteralPath $hook -Raw -ErrorAction SilentlyContinue) -like "*$PrePushMarker*")) {
-    Write-Output "git: a pre-push hook is already in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
+    Write-Output "git: a pre-push hook is already in place -- call .agent-parity/scripts/pre-push.sh from it to guard managed files"
     return
   }
   $body = "#!/bin/sh`n" + $PrePushMarker + "`n" +
     "# Managed file, regenerated by install/update. To add your own checks, put your`n" +
-    "# own pre-push hook here and run .agents/scripts/pre-push.sh from it.`n" +
-    "exec `"`$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh`"`n"
+    "# own pre-push hook here and run .agent-parity/scripts/pre-push.sh from it.`n" +
+    "exec `"`$(git rev-parse --show-toplevel)/.agent-parity/scripts/pre-push.sh`"`n"
   Write-Text $hook $body
   Write-Output "git: pre-push guard registered (.git/hooks/pre-push)"
 }
@@ -662,12 +678,15 @@ function Warn-Parity {
 }
 
 function Cmd-Update {
-  if (!(Test-Path -LiteralPath (Path-InTarget $ServerDir) -PathType Container)) { throw "nothing to update: $(Path-InTarget $ServerDir) not found -- run install first" }
+  # Accept the pre-v0.9.0 layout too (server under .agents/): an update from it
+  # installs into the new location and tombstones the old tooling dirs.
+  if (!(Test-Path -LiteralPath (Path-InTarget $ServerDir) -PathType Container) -and !(Test-Path -LiteralPath (Path-InTarget ".agents/mcp/memory") -PathType Container)) { throw "nothing to update: $(Path-InTarget $ServerDir) not found -- run install first" }
   $old = Installed-Version
   if ($old -eq $Version) {
     Write-Output "already up to date: $old"
     return
   }
+  Migrate-Store
   Install-Server
   Install-ProjectCli
   $ConfigEditor = Install-ConfigEditor

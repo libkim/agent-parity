@@ -16,12 +16,12 @@ esac
 
 case "$1" in
   sync-claude)
-    exec "$target/.agents/scripts/sync-claude.sh" sync >/dev/null
+    exec "$target/.agent-parity/scripts/sync-claude.sh" sync >/dev/null
     ;;
   self-heal)
     shift
     [ "$#" -eq 0 ] || { echo "usage: agent-parity self-heal" >&2; exit 2; }
-    exec "$target/.agents/scripts/self-heal.sh"
+    exec "$target/.agent-parity/scripts/self-heal.sh"
     ;;
   update)
     shift
@@ -42,7 +42,7 @@ case "$1" in
   uninstall | status | version)
     cmd=$1
     shift
-    exec "$target/.agents/scripts/$cmd.sh" "$@"
+    exec "$target/.agent-parity/scripts/$cmd.sh" "$@"
     ;;
   *)
     echo "usage: agent-parity <sync-claude|self-heal|update|uninstall|status|version>" >&2

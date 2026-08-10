@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# The pre-push guard runs the tracked .agents/scripts/pre-push.sh from a shim at
+# The pre-push guard runs the tracked .agent-parity/scripts/pre-push.sh from a shim at
 # git's active pre-push entry point (.git/hooks or the core.hooksPath dir): it
 # blocks while managed files are uncommitted, passes once they are committed, is
 # removed by uninstall, and is only installed when that entry point is empty or
@@ -53,12 +53,12 @@ git -C "$root" -c user.email=t@e -c user.name=t commit -qm install
 hook_runs "$root" || { echo "hook blocked a clean tree" >&2; exit 1; }
 
 # A new uncommitted memory blocks again.
-echo body > "$root/.agents/memory/9999.md"
+echo body > "$root/.agent-parity/memory/9999.md"
 if hook_runs "$root"; then echo "hook allowed an uncommitted memory" >&2; exit 1; fi
-rm -f "$root/.agents/memory/9999.md"
+rm -f "$root/.agent-parity/memory/9999.md"
 
 # uninstall removes our hook.
-AGENT_PARITY_CONFIG_EDITOR="$repo/dist/$editor_asset" sh "$root/.agents/scripts/uninstall.sh" >/dev/null 2>&1
+AGENT_PARITY_CONFIG_EDITOR="$repo/dist/$editor_asset" sh "$root/.agent-parity/scripts/uninstall.sh" >/dev/null 2>&1
 [ ! -e "$hook" ] || { echo "uninstall left the hook behind" >&2; exit 1; }
 
 # A user's own pre-push hook is left untouched: install does not wrap it, does not
@@ -74,7 +74,7 @@ grep -qF "agent-parity managed pre-push hook" "$hook2" && { echo "install overwr
 [ ! -e "$hook2.user" ] || { echo "install created pre-push.user (should not rename)" >&2; exit 1; }
 grep -q "a pre-push hook is already in place" "$root2/out" || { echo "install did not report the user hook" >&2; exit 1; }
 # uninstall leaves the user's own hook alone.
-AGENT_PARITY_CONFIG_EDITOR="$repo/dist/$editor_asset" sh "$root2/.agents/scripts/uninstall.sh" >/dev/null 2>&1
+AGENT_PARITY_CONFIG_EDITOR="$repo/dist/$editor_asset" sh "$root2/.agent-parity/scripts/uninstall.sh" >/dev/null 2>&1
 grep -q MINE-RAN "$hook2" || { echo "uninstall removed the user's own pre-push hook" >&2; exit 1; }
 
 # core.hooksPath just relocates the entry point. When the resolved dir has no

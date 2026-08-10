@@ -4,7 +4,7 @@ set -eu
 [ "$#" -eq 0 ] || { echo "usage: self-heal.sh" >&2; exit 2; }
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 target=$(CDPATH= cd -- "$here/../.." && pwd)
-desired=".agents/mcp/memory/run.sh"
+desired=".agent-parity/mcp/memory/run.sh"
 changed=0
 failed=0
 failure_details=""
@@ -56,7 +56,7 @@ fi
 # Fill the binary cache ahead of the real MCP launch so a pruned or fresh
 # cache never turns into a silent memory outage.
 warm=ok
-"$target/.agents/mcp/memory/run.sh" prewarm >/dev/null 2>&1 || warm=failed
+"$target/.agent-parity/mcp/memory/run.sh" prewarm >/dev/null 2>&1 || warm=failed
 
 [ "$changed" -gt 0 ] || [ "$failed" -gt 0 ] || [ "$warm" = failed ] || exit 0
 if [ "$failed" -gt 0 ]; then

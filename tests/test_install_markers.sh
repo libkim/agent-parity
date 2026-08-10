@@ -35,7 +35,7 @@ grep -q '^.gitignore: agent-parity markers are incomplete, duplicated, or out of
 
 # update only enters the convergence pipeline when the installed version is
 # older than the target version.
-printf '%s\n' v9.8.6 > "$root/.agents/mcp/memory/VERSION"
+printf '%s\n' v9.8.6 > "$root/.agent-parity/mcp/memory/VERSION"
 AGENT_PARITY_RAW="file://$repo" \
 AGENT_PARITY_RELEASE="file://$repo/dist" \
 AGENT_PARITY_VERSION=v9.8.7 \

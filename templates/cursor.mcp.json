@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "memory": {
-      "command": ".agents/mcp/memory/run.sh"
+      "command": ".agent-parity/mcp/memory/run.sh"
     }
   }
 }

@@ -15,7 +15,7 @@ cd "$top" || exit 0
 # The roots agent-parity manages. Naming the directories is enough: ignored
 # subpaths under them are dropped by git status, so this needs no change when the
 # ignore set does.
-roots=".agents .mcp.json .codex .cursor .claude/settings.json AGENTS.md CLAUDE.md .gitattributes .gitignore"
+roots=".agents .agent-parity .mcp.json .codex .cursor .claude/settings.json AGENTS.md CLAUDE.md .gitattributes .gitignore"
 present=""
 for r in $roots; do
   [ -e "$r" ] && present="$present $r"

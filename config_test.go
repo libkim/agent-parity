@@ -74,7 +74,7 @@ func TestWriteConfigFilePreservesCRLF(t *testing.T) {
 
 func TestMergeClaudeSettingsFresh(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	if err := mergeClaudeSettings(path, ".agents/bin/agent-parity sync-claude"); err != nil {
+	if err := mergeClaudeSettings(path, ".agent-parity/bin/agent-parity sync-claude"); err != nil {
 		t.Fatal(err)
 	}
 	m := readSettings(t, path)
@@ -90,7 +90,7 @@ func TestMergeClaudeSettingsFresh(t *testing.T) {
 			t.Errorf("permissions.allow missing %s", p)
 		}
 	}
-	if !strings.Contains(mustJSON(t, m), ".agents/bin/agent-parity sync-claude") {
+	if !strings.Contains(mustJSON(t, m), ".agent-parity/bin/agent-parity sync-claude") {
 		t.Error("sync hook not installed")
 	}
 }
@@ -103,13 +103,13 @@ func TestMergeClaudeSettingsPreservesUserKeysAndRefreshesHook(t *testing.T) {
 	  "permissions": {"allow": ["Bash(ls)"], "deny": ["Read(secret)"]},
 	  "hooks": {"SessionStart": [
 	    {"hooks": [{"type": "command", "command": "echo user-hook"}]},
-	    {"hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.sh\" sync"}]}
+	    {"hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.agent-parity/scripts/sync-claude.sh\" sync"}]}
 	  ]}
 	}`
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	newHook := ".agents/bin/agent-parity sync-claude"
+	newHook := ".agent-parity/bin/agent-parity sync-claude"
 	if err := mergeClaudeSettings(path, newHook); err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestMergeClaudeSettingsRejectsConflictsAndWrongTypesWithoutRewriting(t *tes
 			if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if err := mergeClaudeSettings(path, ".agents/bin/agent-parity sync-claude"); err == nil {
+			if err := mergeClaudeSettings(path, ".agent-parity/bin/agent-parity sync-claude"); err == nil {
 				t.Fatal("expected conflicting or malformed settings to be rejected")
 			}
 			got, _ := os.ReadFile(path)
@@ -181,7 +181,7 @@ func TestMergeClaudeSettingsOwnsScalarsAndPreservesOpaqueArrayMembers(t *testing
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := mergeClaudeSettings(path, ".agents/bin/agent-parity sync-claude"); err != nil {
+	if err := mergeClaudeSettings(path, ".agent-parity/bin/agent-parity sync-claude"); err != nil {
 		t.Fatal(err)
 	}
 	root := readSettings(t, path)
@@ -196,7 +196,7 @@ func TestMergeClaudeSettingsOwnsScalarsAndPreservesOpaqueArrayMembers(t *testing
 func TestUnmergeClaudeSettingsRoundTrip(t *testing.T) {
 	// Only our keys: the file is deleted outright.
 	path := filepath.Join(t.TempDir(), "settings.json")
-	if err := mergeClaudeSettings(path, ".agents/bin/agent-parity sync-claude"); err != nil {
+	if err := mergeClaudeSettings(path, ".agent-parity/bin/agent-parity sync-claude"); err != nil {
 		t.Fatal(err)
 	}
 	if err := unmergeClaudeSettings(path); err != nil {
@@ -212,7 +212,7 @@ func TestUnmergeClaudeSettingsRoundTrip(t *testing.T) {
 	if err := os.WriteFile(path2, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := mergeClaudeSettings(path2, ".agents/bin/agent-parity sync-claude"); err != nil {
+	if err := mergeClaudeSettings(path2, ".agent-parity/bin/agent-parity sync-claude"); err != nil {
 		t.Fatal(err)
 	}
 	if err := unmergeClaudeSettings(path2); err != nil {
@@ -393,7 +393,7 @@ func TestMergeTOMLRecognizesEquivalentMemoryEntries(t *testing.T) {
 			if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if err := mergeServerConfig(path, ".agents/mcp/memory/run.sh"); err != nil {
+			if err := mergeServerConfig(path, ".agent-parity/mcp/memory/run.sh"); err != nil {
 				t.Fatal(err)
 			}
 			got, err := os.ReadFile(path)
@@ -413,7 +413,7 @@ func TestMergeTOMLAppendsAndPreservesExistingText(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := mergeServerConfig(path, ".agents/mcp/memory/run.sh"); err != nil {
+	if err := mergeServerConfig(path, ".agent-parity/mcp/memory/run.sh"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(path)
@@ -433,7 +433,7 @@ func TestMergeTOMLAppendsDefaultApproval(t *testing.T) {
 	if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := mergeServerConfig(path, ".agents/mcp/memory/run.sh"); err != nil {
+	if err := mergeServerConfig(path, ".agent-parity/mcp/memory/run.sh"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(path)
@@ -451,9 +451,9 @@ func TestMergeTOMLAppendsDefaultApproval(t *testing.T) {
 
 func TestEnsureTOMLBackfillsDefaultApproval(t *testing.T) {
 	tests := map[string]string{
-		"table":  "# keep\n[mcp_servers.memory]\ncommand = \".agents/mcp/memory/run.sh\"\n",
-		"dotted": "# keep\nmcp_servers.memory.command = \".agents/mcp/memory/run.sh\"\n",
-		"inline": "# keep\nmcp_servers = { memory = { command = \".agents/mcp/memory/run.sh\" } }\n",
+		"table":  "# keep\n[mcp_servers.memory]\ncommand = \".agent-parity/mcp/memory/run.sh\"\n",
+		"dotted": "# keep\nmcp_servers.memory.command = \".agent-parity/mcp/memory/run.sh\"\n",
+		"inline": "# keep\nmcp_servers = { memory = { command = \".agent-parity/mcp/memory/run.sh\" } }\n",
 	}
 	for name, original := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -461,7 +461,7 @@ func TestEnsureTOMLBackfillsDefaultApproval(t *testing.T) {
 			if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			changed, err := ensureMemoryConfig(path, ".agents/mcp/memory/run.sh")
+			changed, err := ensureMemoryConfig(path, ".agent-parity/mcp/memory/run.sh")
 			if err != nil || !changed {
 				t.Fatalf("changed=%v err=%v", changed, err)
 			}
@@ -472,7 +472,7 @@ func TestEnsureTOMLBackfillsDefaultApproval(t *testing.T) {
 			if !strings.Contains(string(got), "# keep") || strings.Count(string(got), `default_tools_approval_mode = "approve"`) != 1 {
 				t.Fatalf("approval was not added without losing user text:\n%s", got)
 			}
-			changed, err = ensureMemoryConfig(path, ".agents/mcp/memory/run.sh")
+			changed, err = ensureMemoryConfig(path, ".agent-parity/mcp/memory/run.sh")
 			if err != nil || changed {
 				t.Fatalf("second ensure changed=%v err=%v", changed, err)
 			}
@@ -482,11 +482,11 @@ func TestEnsureTOMLBackfillsDefaultApproval(t *testing.T) {
 
 func TestEnsureTOMLOwnedNamespaceOverwritesDescendants(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	original := "[mcp_servers.memory]\ncommand = \".agents/mcp/memory/run.sh\"\ndefault_tools_approval_mode = \"prompt\"\n"
+	original := "[mcp_servers.memory]\ncommand = \".agent-parity/mcp/memory/run.sh\"\ndefault_tools_approval_mode = \"prompt\"\n"
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := ensureMemoryConfig(path, ".agents/mcp/memory/run.sh"); err != nil || !changed {
+	if changed, err := ensureMemoryConfig(path, ".agent-parity/mcp/memory/run.sh"); err != nil || !changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}
 	got, _ := os.ReadFile(path)
@@ -501,7 +501,7 @@ func TestUnmergeTOMLRemovesServerAndApprovalTools(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := mergeServerConfig(path, ".agents/mcp/memory/run.sh"); err != nil {
+	if err := mergeServerConfig(path, ".agent-parity/mcp/memory/run.sh"); err != nil {
 		t.Fatal(err)
 	}
 	if err := unmergeServerConfig(path); err != nil {
@@ -530,7 +530,7 @@ func TestMergeUnmergeTOMLRoundTripRestoresOriginal(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := mergeServerConfig(path, ".agents/mcp/memory/run.sh"); err != nil {
+	if err := mergeServerConfig(path, ".agent-parity/mcp/memory/run.sh"); err != nil {
 		t.Fatal(err)
 	}
 	if err := unmergeServerConfig(path); err != nil {
@@ -550,7 +550,7 @@ func TestMergeTOMLRejectsInvalidInput(t *testing.T) {
 	if err := os.WriteFile(path, []byte("invalid = [\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := mergeServerConfig(path, ".agents/mcp/memory/run.sh"); err == nil {
+	if err := mergeServerConfig(path, ".agent-parity/mcp/memory/run.sh"); err == nil {
 		t.Fatal("expected invalid TOML to be rejected")
 	}
 }
@@ -577,24 +577,24 @@ func TestHasMemoryServerRecognizesEquivalentTOML(t *testing.T) {
 
 func TestRetargetJSONReplacesManagedMemoryNamespace(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mcp.json")
-	original := `{"other":"keep","mcpServers":{"other":{"command":"other"},"memory":{"command":".agents/mcp/memory/run.sh","args":["--keep"]}}}`
+	original := `{"other":"keep","mcpServers":{"other":{"command":"other"},"memory":{"command":".agent-parity/mcp/memory/run.sh","args":["--keep"]}}}`
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	changed, err := retargetMemoryConfig(path, ".agents/mcp/memory/run.cmd")
+	changed, err := retargetMemoryConfig(path, ".agent-parity/mcp/memory/run.cmd")
 	if err != nil || !changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}
 	m := readSettings(t, path)
 	servers := m["mcpServers"].(map[string]any)
 	memory := servers["memory"].(map[string]any)
-	if !reflect.DeepEqual(memory, canonicalMemoryJSON(".agents/mcp/memory/run.cmd")) {
+	if !reflect.DeepEqual(memory, canonicalMemoryJSON(".agent-parity/mcp/memory/run.cmd")) {
 		t.Fatalf("memory namespace did not converge: %#v", memory)
 	}
 	if servers["other"].(map[string]any)["command"] != "other" || m["other"] != "keep" {
 		t.Fatal("unrelated JSON content changed")
 	}
-	changed, err = retargetMemoryConfig(path, ".agents/mcp/memory/run.cmd")
+	changed, err = retargetMemoryConfig(path, ".agent-parity/mcp/memory/run.cmd")
 	if err != nil || changed {
 		t.Fatalf("second retarget changed=%v err=%v", changed, err)
 	}
@@ -602,21 +602,21 @@ func TestRetargetJSONReplacesManagedMemoryNamespace(t *testing.T) {
 
 func TestEnsureJSONUsesExactMCPServersMemoryPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mcp.json")
-	original := `{"nested":{"memory":{"command":".agents/mcp/memory/run.cmd"}},"keep":true}`
+	original := `{"nested":{"memory":{"command":".agent-parity/mcp/memory/run.cmd"}},"keep":true}`
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	changed, err := ensureMemoryConfig(path, ".agents/mcp/memory/run.sh")
+	changed, err := ensureMemoryConfig(path, ".agent-parity/mcp/memory/run.sh")
 	if err != nil || !changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}
 	root := readSettings(t, path)
 	nested := root["nested"].(map[string]any)["memory"].(map[string]any)
-	if nested["command"] != ".agents/mcp/memory/run.cmd" {
+	if nested["command"] != ".agent-parity/mcp/memory/run.cmd" {
 		t.Fatal("unrelated nested memory object was modified")
 	}
 	servers := root["mcpServers"].(map[string]any)
-	if servers["memory"].(map[string]any)["command"] != ".agents/mcp/memory/run.sh" {
+	if servers["memory"].(map[string]any)["command"] != ".agent-parity/mcp/memory/run.sh" {
 		t.Fatal("mcpServers.memory was not added")
 	}
 }
@@ -630,7 +630,7 @@ func TestRetargetPreservesAndReportsUserMemoryCommand(t *testing.T) {
 		if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if changed, err := retargetMemoryConfig(path, ".agents/mcp/memory/run.cmd"); err == nil || changed || !strings.Contains(err.Error(), "edit it manually") {
+		if changed, err := retargetMemoryConfig(path, ".agent-parity/mcp/memory/run.cmd"); err == nil || changed || !strings.Contains(err.Error(), "edit it manually") {
 			t.Fatalf("user command was not preserved with a manual-edit warning: changed=%v err=%v", changed, err)
 		}
 		got, _ := os.ReadFile(path)
@@ -738,7 +738,7 @@ func TestMergeAgentHookPreservesOpaqueSharedMembersAndOverwritesDedicatedNamespa
 
 func TestUnmergeNestedHookPreservesOpaqueGroups(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hooks.json")
-	original := `{"hooks":{"SessionStart":[42,{"hooks":[42,{"type":"command","command":".agents/bin/agent-parity self-heal"},{"command":"echo user"}]}]}}`
+	original := `{"hooks":{"SessionStart":[42,{"hooks":[42,{"type":"command","command":".agent-parity/bin/agent-parity self-heal"},{"command":"echo user"}]}]}}`
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -809,7 +809,7 @@ func TestPortableHooksMigrateExactV060Commands(t *testing.T) {
 			if strings.Contains(string(raw), `"command": ".agents/bin/agent-parity.cmd self-heal"`) {
 				t.Fatalf("v0.6.0 Windows-only hook was not migrated:\n%s", raw)
 			}
-			if !strings.Contains(string(raw), `"command": ".agents/bin/agent-parity self-heal"`) {
+			if !strings.Contains(string(raw), `"command": ".agent-parity/bin/agent-parity self-heal"`) {
 				t.Fatalf("platform-neutral hook missing:\n%s", raw)
 			}
 			if tc.kind == "antigravity" {
@@ -845,7 +845,7 @@ func TestUnmergeFreshAgentHookRemovesScaffoldingFile(t *testing.T) {
 
 func TestClaudeSyncAndSelfHealHooksHaveIndependentLifecycles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	if err := mergeClaudeSettings(path, ".agents/bin/agent-parity sync-claude"); err != nil {
+	if err := mergeClaudeSettings(path, ".agent-parity/bin/agent-parity sync-claude"); err != nil {
 		t.Fatal(err)
 	}
 	if err := mergeAgentHook(path, "claude", "", ""); err != nil {
@@ -867,10 +867,10 @@ func TestClaudeSyncAndSelfHealHooksHaveIndependentLifecycles(t *testing.T) {
 func TestStatusHookChecksUseExactJSONPaths(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hooks.json")
 	decoys := map[string]string{
-		"claude":      `{"note":".agents/bin/agent-parity self-heal","hooks":{"OtherEvent":[{"hooks":[{"type":"command","command":".agents/bin/agent-parity self-heal"}]}]}}`,
+		"claude":      `{"note":".agent-parity/bin/agent-parity self-heal","hooks":{"OtherEvent":[{"hooks":[{"type":"command","command":".agent-parity/bin/agent-parity self-heal"}]}]}}`,
 		"codex":       `{"note":"agent-parity self-heal","hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo agent-parity self-heal"}]}]}}`,
 		"cursor":      `{"note":".agents/bin/agent-parity.cmd self-heal","hooks":{"other":[{"command":".agents/bin/agent-parity.cmd self-heal"}]}}`,
-		"antigravity": `{"note":".agents/bin/agent-parity self-heal","other-hook":{"PreInvocation":[{"command":".agents/bin/agent-parity self-heal"}]}}`,
+		"antigravity": `{"note":".agent-parity/bin/agent-parity self-heal","other-hook":{"PreInvocation":[{"command":".agent-parity/bin/agent-parity self-heal"}]}}`,
 	}
 	for kind, raw := range decoys {
 		t.Run(kind, func(t *testing.T) {
@@ -894,8 +894,8 @@ func TestStatusHookChecksUseExactJSONPaths(t *testing.T) {
 
 func TestStatusClaudeSyncCheckUsesExactJSONPathAndCommand(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	command := ".agents/bin/agent-parity sync-claude"
-	if err := os.WriteFile(path, []byte(`{"note":".agents/bin/agent-parity sync-claude","hooks":{"OtherEvent":[{"hooks":[{"type":"command","command":".agents/bin/agent-parity sync-claude"}]}]}}`), 0o644); err != nil {
+	command := ".agent-parity/bin/agent-parity sync-claude"
+	if err := os.WriteFile(path, []byte(`{"note":".agent-parity/bin/agent-parity sync-claude","hooks":{"OtherEvent":[{"hooks":[{"type":"command","command":".agent-parity/bin/agent-parity sync-claude"}]}]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	has, err := hasClaudeSyncHook(path, command)
@@ -933,8 +933,8 @@ func TestStatusMemoryConfigUsesCanonicalOwnedNamespace(t *testing.T) {
 	for _, tc := range []struct {
 		name, file, initial, command string
 	}{
-		{"json", "mcp.json", `{"mcpServers":{"memory":{"command":".agents/mcp/memory/run.cmd","args":["stale"]}}}`, ".agents/mcp/memory/run.cmd"},
-		{"toml", "config.toml", "[mcp_servers.memory]\ncommand = \".agents/mcp/memory/run.cmd\"\ndefault_tools_approval_mode = \"prompt\"\n", ".agents/mcp/memory/run.cmd"},
+		{"json", "mcp.json", `{"mcpServers":{"memory":{"command":".agent-parity/mcp/memory/run.cmd","args":["stale"]}}}`, ".agent-parity/mcp/memory/run.cmd"},
+		{"toml", "config.toml", "[mcp_servers.memory]\ncommand = \".agent-parity/mcp/memory/run.cmd\"\ndefault_tools_approval_mode = \"prompt\"\n", ".agent-parity/mcp/memory/run.cmd"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), tc.file)
@@ -956,7 +956,7 @@ func TestStatusMemoryConfigUsesCanonicalOwnedNamespace(t *testing.T) {
 
 func TestStatusClaudeSettingsUsesFullManagedState(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	command := ".agents/bin/agent-parity sync-claude"
+	command := ".agent-parity/bin/agent-parity sync-claude"
 	if err := mergeClaudeSettings(path, command); err != nil {
 		t.Fatal(err)
 	}
@@ -1013,12 +1013,12 @@ func TestMergeAgentHookPreservesDisabledUserSetting(t *testing.T) {
 }
 
 func TestRetargetTOMLPreservesCommentsAndOtherTables(t *testing.T) {
-	original := "# keep\n[mcp_servers.memory]\ncommand = \".agents/mcp/memory/run.cmd\" # launcher\n\n[mcp_servers.other]\ncommand = \"other\"\n"
+	original := "# keep\n[mcp_servers.memory]\ncommand = \".agent-parity/mcp/memory/run.cmd\" # launcher\n\n[mcp_servers.other]\ncommand = \"other\"\n"
 	path := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	changed, err := retargetMemoryConfig(path, ".agents/mcp/memory/run.sh")
+	changed, err := retargetMemoryConfig(path, ".agent-parity/mcp/memory/run.sh")
 	if err != nil || !changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}
@@ -1030,10 +1030,10 @@ func TestRetargetTOMLPreservesCommentsAndOtherTables(t *testing.T) {
 
 func TestRetargetTOMLEquivalentSpellings(t *testing.T) {
 	tests := []string{
-		`mcp_servers.memory.command = ".agents/mcp/memory/run.cmd"` + "\n",
-		"[mcp_servers]\nmemory = { command = \".agents/mcp/memory/run.cmd\", args = [\"--keep\"] }\n",
-		"mcp_servers = { memory = { command = \".agents/mcp/memory/run.cmd\", args = [\"--keep\"] }, other = { command = \"other\" } }\n",
-		"[mcp_servers.\"memory\"]\ncommand = '.agents/mcp/memory/run.cmd' # launcher\n",
+		`mcp_servers.memory.command = ".agent-parity/mcp/memory/run.cmd"` + "\n",
+		"[mcp_servers]\nmemory = { command = \".agent-parity/mcp/memory/run.cmd\", args = [\"--keep\"] }\n",
+		"mcp_servers = { memory = { command = \".agent-parity/mcp/memory/run.cmd\", args = [\"--keep\"] }, other = { command = \"other\" } }\n",
+		"[mcp_servers.\"memory\"]\ncommand = '.agent-parity/mcp/memory/run.cmd' # launcher\n",
 	}
 	for _, original := range tests {
 		t.Run(original, func(t *testing.T) {
@@ -1041,7 +1041,7 @@ func TestRetargetTOMLEquivalentSpellings(t *testing.T) {
 			if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			changed, err := retargetMemoryConfig(path, ".agents/mcp/memory/run.sh")
+			changed, err := retargetMemoryConfig(path, ".agent-parity/mcp/memory/run.sh")
 			if err != nil || !changed {
 				t.Fatalf("changed=%v err=%v", changed, err)
 			}
@@ -1049,7 +1049,7 @@ func TestRetargetTOMLEquivalentSpellings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(string(got), ".agents/mcp/memory/run.sh") || strings.Contains(string(got), ".agents/mcp/memory/run.cmd") {
+			if !strings.Contains(string(got), ".agent-parity/mcp/memory/run.sh") || strings.Contains(string(got), ".agent-parity/mcp/memory/run.cmd") {
 				t.Fatalf("command was not retargeted: %s", got)
 			}
 			if strings.Contains(string(got), "--keep") {
@@ -1064,10 +1064,10 @@ func TestRetargetTOMLEquivalentSpellings(t *testing.T) {
 
 func TestUnmergeTOMLEquivalentSpellings(t *testing.T) {
 	tests := []string{
-		"# keep\nmcp_servers.memory.command = \".agents/mcp/memory/run.sh\"\nother = \"keep\"\n",
-		"# keep\n[mcp_servers]\nmemory = { command = \".agents/mcp/memory/run.sh\", args = [\"--keep\"] }\nother = { command = \"other\" }\n",
-		"# keep\nmcp_servers = { memory = { command = \".agents/mcp/memory/run.sh\" }, other = { command = \"other\" } }\n",
-		"# keep\n[mcp_servers.\"memory\"]\ncommand = '.agents/mcp/memory/run.sh'\n[mcp_servers.other]\ncommand = \"other\"\n",
+		"# keep\nmcp_servers.memory.command = \".agent-parity/mcp/memory/run.sh\"\nother = \"keep\"\n",
+		"# keep\n[mcp_servers]\nmemory = { command = \".agent-parity/mcp/memory/run.sh\", args = [\"--keep\"] }\nother = { command = \"other\" }\n",
+		"# keep\nmcp_servers = { memory = { command = \".agent-parity/mcp/memory/run.sh\" }, other = { command = \"other\" } }\n",
+		"# keep\n[mcp_servers.\"memory\"]\ncommand = '.agent-parity/mcp/memory/run.sh'\n[mcp_servers.other]\ncommand = \"other\"\n",
 	}
 	for _, original := range tests {
 		t.Run(original, func(t *testing.T) {
@@ -1104,7 +1104,7 @@ func TestRetargetAcceptsLegacyVendoredBinary(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	changed, err := retargetMemoryConfig(path, ".agents/mcp/memory/run.sh")
+	changed, err := retargetMemoryConfig(path, ".agent-parity/mcp/memory/run.sh")
 	if err != nil || !changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}

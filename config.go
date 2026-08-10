@@ -755,6 +755,10 @@ func retargetMemoryConfig(path, command string) (bool, error) {
 func isManagedMemoryCommand(command string) bool {
 	command = strings.TrimSpace(strings.ReplaceAll(command, `\`, "/"))
 	for _, managed := range []string{
+		".agent-parity/mcp/memory/run.sh",
+		".agent-parity/mcp/memory/run.cmd",
+		// Legacy: the pre-v0.9.0 layout kept the launcher under .agents/, so an
+		// update from that layout must recognize and retarget these commands.
 		".agents/mcp/memory/run.sh",
 		".agents/mcp/memory/run.cmd",
 		".agents/mcp/memory/dist/memory-mcp-linux-amd64",
@@ -1249,6 +1253,10 @@ func tomlMemoryRemovalEdits(raw []byte) ([]textEdit, error) {
 func isClaudeSyncCommand(command string) bool {
 	normalized := strings.TrimSpace(strings.ReplaceAll(command, `\`, "/"))
 	for _, managed := range []string{
+		`bash "$CLAUDE_PROJECT_DIR/.agent-parity/scripts/sync-claude.sh" sync`,
+		`powershell -NoProfile -ExecutionPolicy Bypass -Command "& \"$env:CLAUDE_PROJECT_DIR/.agent-parity/scripts/sync-claude.ps1\" sync"`,
+		`.agent-parity/bin/agent-parity sync-claude`,
+		// Legacy: the pre-v0.9.0 layout kept these under .agents/.
 		`bash "$CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.sh" sync`,
 		`powershell -NoProfile -ExecutionPolicy Bypass -Command "& \"$env:CLAUDE_PROJECT_DIR/.agents/scripts/sync-claude.ps1\" sync"`,
 		`.agents/bin/agent-parity sync-claude`,
@@ -1465,25 +1473,30 @@ func hookSpec(kind string) (agentHookSpec, error) {
 	switch kind {
 	case "claude":
 		return agentHookSpec{
-			event: "SessionStart", command: `.agents/bin/agent-parity self-heal`, nested: true,
+			event: "SessionStart", command: `.agent-parity/bin/agent-parity self-heal`, nested: true,
+			legacyCommands: []string{`.agents/bin/agent-parity self-heal`, `.agents/bin/agent-parity.cmd self-heal`},
 		}, nil
 	case "codex":
 		return agentHookSpec{
 			event: "SessionStart", nested: true,
-			command:        `sh -c 'root=$(git rev-parse --show-toplevel) && exec "$root/.agents/bin/agent-parity" self-heal'`,
-			commandWindows: `powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) '.agents/bin/agent-parity.cmd') self-heal"`,
+			command:        `sh -c 'root=$(git rev-parse --show-toplevel) && exec "$root/.agent-parity/bin/agent-parity" self-heal'`,
+			commandWindows: `powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) '.agent-parity/bin/agent-parity.cmd') self-heal"`,
+			legacyCommands: []string{
+				`sh -c 'root=$(git rev-parse --show-toplevel) && exec "$root/.agents/bin/agent-parity" self-heal'`,
+				`powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) '.agents/bin/agent-parity.cmd') self-heal"`,
+			},
 		}, nil
 	case "cursor":
 		return agentHookSpec{
 			event: "sessionStart", container: "hooks",
-			command:        ".agents/bin/agent-parity self-heal",
-			legacyCommands: []string{".agents/bin/agent-parity.cmd self-heal"},
+			command:        ".agent-parity/bin/agent-parity self-heal",
+			legacyCommands: []string{".agents/bin/agent-parity self-heal", ".agents/bin/agent-parity.cmd self-heal"},
 		}, nil
 	case "antigravity":
 		return agentHookSpec{
 			event: "PreInvocation", container: "agent-parity",
-			command:        ".agents/bin/agent-parity self-heal",
-			legacyCommands: []string{".agents/bin/agent-parity.cmd self-heal"},
+			command:        ".agent-parity/bin/agent-parity self-heal",
+			legacyCommands: []string{".agents/bin/agent-parity self-heal", ".agents/bin/agent-parity.cmd self-heal"},
 		}, nil
 	default:
 		return agentHookSpec{}, fmt.Errorf("unsupported hook kind: %s", kind)

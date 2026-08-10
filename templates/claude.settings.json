@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".agents/bin/agent-parity sync-claude"
+            "command": ".agent-parity/bin/agent-parity sync-claude"
           }
         ]
       },
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".agents/bin/agent-parity self-heal",
+            "command": ".agent-parity/bin/agent-parity self-heal",
             "timeout": 30
           }
         ]

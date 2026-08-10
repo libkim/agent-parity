@@ -8,12 +8,12 @@ $ErrorActionPreference = "Stop"
 $RootDir = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $SkillsSource = Join-Path $RootDir ".agents\skills"
 $SkillsTarget = Join-Path $RootDir ".claude\skills"
-$SettingsSource = Join-Path $RootDir ".agents\claude\settings.json"
+$SettingsSource = Join-Path $RootDir ".agent-parity\claude\settings.json"
 $SettingsTarget = Join-Path $RootDir ".claude\settings.json"
 
 function Usage {
   @"
-Usage: .agents\scripts\sync-claude.ps1 <check|sync|clean>
+Usage: .agent-parity\scripts\sync-claude.ps1 <check|sync|clean>
 
 Materialize Claude Code artifacts from the synced .agents source.
   check  Report whether .claude matches .agents (skills + settings).
@@ -60,7 +60,7 @@ function Check {
   }
 
   if (!(Test-Path -LiteralPath $SettingsSource -PathType Leaf)) {
-    Write-Output "settings: no source (.agents\claude\settings.json) -- skipped"
+    Write-Output "settings: no source (.agent-parity\claude\settings.json) -- skipped"
   } elseif (!(Test-Path -LiteralPath $SettingsTarget -PathType Leaf)) {
     Write-Output "settings: missing .claude\settings.json"
     $status = 1
@@ -81,7 +81,7 @@ function Sync {
   Write-Output "synced:   .claude\skills recreated from .agents\skills"
   if (Test-Path -LiteralPath $SettingsSource -PathType Leaf) {
     Copy-Item -LiteralPath $SettingsSource -Destination $SettingsTarget -Force
-    Write-Output "synced:   .claude\settings.json recreated from .agents\claude\settings.json"
+    Write-Output "synced:   .claude\settings.json recreated from .agent-parity\claude\settings.json"
   } else {
     Write-Output "settings: no source -- skipped"
   }

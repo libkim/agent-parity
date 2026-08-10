@@ -9,22 +9,22 @@ config_editor=${AGENT_PARITY_CONFIG_EDITOR:-"$repo/dist/$editor_asset"}
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-uninstall-test.XXXXXX")
 trap 'rm -rf "$root"' EXIT HUP INT TERM
 
-mkdir -p "$root/.agents/scripts" "$root/.agents/mcp/memory" "$root/.agents/claude" \
+mkdir -p "$root/.agent-parity/scripts" "$root/.agent-parity/mcp/memory" "$root/.agent-parity/claude" \
   "$root/.agents/skills/agent-parity" "$root/.claude/skills/agent-parity" \
   "$root/.codex" "$root/.cursor" "$root/fake-bin"
-cp "$repo/templates/common.sh" "$repo/templates/uninstall.sh" "$root/.agents/scripts/"
-cp "$repo/templates/status.sh" "$root/.agents/scripts/"
-: > "$root/.agents/scripts/sync-claude.sh"
+cp "$repo/templates/common.sh" "$repo/templates/uninstall.sh" "$root/.agent-parity/scripts/"
+cp "$repo/templates/status.sh" "$root/.agent-parity/scripts/"
+: > "$root/.agent-parity/scripts/sync-claude.sh"
 : > "$root/.agents/skills/agent-parity/SKILL.md"
 : > "$root/.claude/skills/agent-parity/SKILL.md"
-printf '%s\n' vtest > "$root/.agents/mcp/memory/VERSION"
+printf '%s\n' vtest > "$root/.agent-parity/mcp/memory/VERSION"
 
-cat > "$root/.agents/mcp/memory/run.sh" <<'EOF'
+cat > "$root/.agent-parity/mcp/memory/run.sh" <<'EOF'
 #!/usr/bin/env sh
 touch "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)/mcp-binary-called"
 exit 92
 EOF
-chmod +x "$root/.agents/mcp/memory/run.sh"
+chmod +x "$root/.agent-parity/mcp/memory/run.sh"
 cat > "$root/fake-bin/curl" <<EOF
 #!/usr/bin/env sh
 touch "$root/network-called"
@@ -33,7 +33,7 @@ EOF
 chmod +x "$root/fake-bin/curl"
 
 cat > "$root/.mcp.json" <<'EOF'
-{"keep":true,"mcpServers":{"memory":{"command":".agents/mcp/memory/run.sh"},"other":{"command":"other"}}}
+{"keep":true,"mcpServers":{"memory":{"command":".agent-parity/mcp/memory/run.sh"},"other":{"command":"other"}}}
 EOF
 cat > "$root/.codex/config.toml" <<'EOF'
 # keep
@@ -41,13 +41,13 @@ cat > "$root/.codex/config.toml" <<'EOF'
 command = "other"
 
 [mcp_servers.memory]
-command = ".agents/mcp/memory/run.sh"
+command = ".agent-parity/mcp/memory/run.sh"
 
 [mcp_servers.memory.tools.memory_add]
 approval_mode = "approve"
 EOF
-cat > "$root/.agents/claude/settings.json" <<'EOF'
-{"model":"opus","autoMemoryEnabled":false,"enabledMcpjsonServers":["memory"],"hooks":{"SessionStart":[{"hooks":[{"command":"echo user"}]},{"hooks":[{"command":".agents/bin/agent-parity sync-claude"},{"command":".agents/bin/agent-parity self-heal"}]}]}}
+cat > "$root/.agent-parity/claude/settings.json" <<'EOF'
+{"model":"opus","autoMemoryEnabled":false,"enabledMcpjsonServers":["memory"],"hooks":{"SessionStart":[{"hooks":[{"command":"echo user"}]},{"hooks":[{"command":".agent-parity/bin/agent-parity sync-claude"},{"command":".agent-parity/bin/agent-parity self-heal"}]}]}}
 EOF
 cat > "$root/.cursor/cli.json" <<'EOF'
 {"theme":"dark","permissions":{"allow":["Shell(git:*)","Mcp(memory:*)"],"deny":["Shell(rm:*)"]}}
@@ -67,7 +67,7 @@ EOF
 agents_before=$(cat "$root/AGENTS.md")
 gitignore_before=$(cat "$root/.gitignore")
 
-status_output=$(PATH="$root/fake-bin:$PATH" AGENT_PARITY_CONFIG_EDITOR="$config_editor" sh "$root/.agents/scripts/status.sh")
+status_output=$(PATH="$root/fake-bin:$PATH" AGENT_PARITY_CONFIG_EDITOR="$config_editor" sh "$root/.agent-parity/scripts/status.sh")
 printf '%s\n' "$status_output" | grep -q '^mcp registrations:$'
 printf '%s\n' "$status_output" | grep -q '^claude wrapper: registered (CLAUDE.md)$'
 ! printf '%s\n' "$status_output" | grep -q '^  Claude wrapper:'
@@ -75,23 +75,23 @@ printf '%s\n' "$status_output" | grep -q '^AGENTS.md: agent-parity markers are i
 printf '%s\n' "$status_output" | grep -q '^.gitignore: agent-parity markers are incomplete, duplicated, or out of order; repair them manually$'
 rm -f "$root/network-called" "$root/mcp-binary-called"
 
-(TARGET="$root"; . "$root/.agents/scripts/common.sh"; unreg_claude_wrapper)
+(TARGET="$root"; . "$root/.agent-parity/scripts/common.sh"; unreg_claude_wrapper)
 [ ! -e "$root/CLAUDE.md" ]
 printf '%s\n' 'user-owned Claude instructions' > "$root/CLAUDE.md"
 
-PATH="$root/fake-bin:$PATH" AGENT_PARITY_CONFIG_EDITOR="$config_editor" sh "$root/.agents/scripts/uninstall.sh"
+PATH="$root/fake-bin:$PATH" AGENT_PARITY_CONFIG_EDITOR="$config_editor" sh "$root/.agent-parity/scripts/uninstall.sh"
 
 [ ! -e "$root/network-called" ]
 [ ! -e "$root/mcp-binary-called" ]
-[ ! -e "$root/.agents/mcp/memory" ]
+[ ! -e "$root/.agent-parity/mcp/memory" ]
 grep -q '"keep": true' "$root/.mcp.json"
 grep -q '"other"' "$root/.mcp.json"
 ! grep -q '"memory"' "$root/.mcp.json"
 grep -q '\[mcp_servers.other\]' "$root/.codex/config.toml"
 ! grep -q 'mcp_servers.memory' "$root/.codex/config.toml"
-grep -q '"model": "opus"' "$root/.agents/claude/settings.json"
-grep -q 'echo user' "$root/.agents/claude/settings.json"
-! grep -q 'agent-parity' "$root/.agents/claude/settings.json"
+grep -q '"model": "opus"' "$root/.agent-parity/claude/settings.json"
+grep -q 'echo user' "$root/.agent-parity/claude/settings.json"
+! grep -q 'agent-parity' "$root/.agent-parity/claude/settings.json"
 grep -q '"theme": "dark"' "$root/.cursor/cli.json"
 grep -q 'Shell(git:\*)' "$root/.cursor/cli.json"
 grep -q 'Shell(rm:\*)' "$root/.cursor/cli.json"

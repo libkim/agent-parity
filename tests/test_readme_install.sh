@@ -16,9 +16,9 @@ trap 'rm -rf "$root"' EXIT HUP INT TERM
   curl -fsSL "file://$repo/dist/install.sh" | sh
 )
 
-[ "$(tr -d '\r\n' < "$root/.agents/mcp/memory/VERSION")" = "$version" ]
-[ -x "$root/.agents/bin/agent-parity" ]
-[ -x "$root/.agents/scripts/status.sh" ]
+[ "$(tr -d '\r\n' < "$root/.agent-parity/mcp/memory/VERSION")" = "$version" ]
+[ -x "$root/.agent-parity/bin/agent-parity" ]
+[ -x "$root/.agent-parity/scripts/status.sh" ]
 [ -f "$root/.mcp.json" ]
 [ -f "$root/.cursor/cli.json" ]
 # install must not pre-download the server binary; that happens at first

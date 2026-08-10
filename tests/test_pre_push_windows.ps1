@@ -83,7 +83,7 @@ try {
   if (Test-Path -LiteralPath "$hook2.user") { throw "install created pre-push.user (should not rename)" }
   if (($out2 -join "`n") -notmatch "a pre-push hook is already in place") { throw "install did not report the user hook" }
   # uninstall leaves the user's own hook alone.
-  & (Join-Path $r2 ".agents\bin\agent-parity.cmd") uninstall *> $null
+  & (Join-Path $r2 ".agent-parity\bin\agent-parity.cmd") uninstall *> $null
   if (![IO.File]::ReadAllText($hook2).Contains("MINE-RAN")) { throw "uninstall removed the user's own pre-push hook" }
 
   # 3) core.hooksPath relocates the entry point. With no pre-push there yet,
