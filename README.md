@@ -119,8 +119,8 @@ them through its own skill interface.
 | Codex CLI | "update agent-parity" | `$agent-parity update` |
 | Cursor Agent | "update agent-parity" | `/agent-parity` and pick it |
 | Antigravity CLI | "update agent-parity" | — |
-| POSIX sh (Linux/macOS) | — | `./.agents/bin/agent-parity update` |
-| PowerShell (Windows) | — | `.\.agents\bin\agent-parity.cmd update` |
+| POSIX sh (Linux/macOS) | — | `./.agent-parity/bin/agent-parity update` |
+| PowerShell (Windows) | — | `.\.agent-parity\bin\agent-parity.cmd update` |
 
 <details>
 <summary><code>status</code> output</summary>
@@ -159,7 +159,7 @@ inspection according to the reported wiring state.
 | `memory store` | `<n> entries` / `missing` | Number of saved memory Markdown files, or that the store directory does not exist. |
 | `git` | `all artifacts tracked` | Installed artifacts are eligible to sync through Git. |
 |  | `IGNORED ...` | One or more installed artifacts are ignored and will not sync until `install` or a newer-version `update` repairs the managed `.gitignore` block. |
-|  | `memory merge driver: registered` / `missing` | Whether the git merge driver for `.agents/memory` files is registered in `.git/config`. |
+|  | `memory merge driver: registered` / `missing` | Whether the git merge driver for `.agent-parity/memory` files is registered in `.git/config`. |
 |  | `pre-push guard: registered` / `a pre-push hook is in place ...` / `missing` | Whether the pre-push hook that blocks pushing uncommitted managed files is installed. When another pre-push hook already occupies the entry point, it reports how to wire the guard in instead. See [Git pre-push hooks](#git-pre-push-hooks). |
 | `parity` | `<file> exists ...` | An agent-specific instruction file would make agent behavior diverge; merge its content into `AGENTS.md`. |
 
@@ -167,7 +167,7 @@ inspection according to the reported wiring state.
 
 ### Git pre-push hooks
 
-agent-parity installs a `pre-push` hook that runs `.agents/scripts/pre-push.sh`,
+agent-parity installs a `pre-push` hook that runs `.agent-parity/scripts/pre-push.sh`,
 which blocks a push while any managed file is uncommitted, so cross-machine
 sharing does not silently break. git runs only one hook per event, so the hook is
 installed only when the pre-push entry point is empty or already ours. That entry
@@ -175,14 +175,14 @@ point is `.git/hooks/pre-push`, or, if a hook manager like husky set
 `core.hooksPath`, the `pre-push` file in that directory.
 
 To run your own checks alongside the guard, make your own hook call
-`.agents/scripts/pre-push.sh`:
+`.agent-parity/scripts/pre-push.sh`:
 
 - **If a pre-push hook is already there** (your own, or a hook manager's such as
   husky), agent-parity leaves it alone; add a line that runs
-  `.agents/scripts/pre-push.sh` to it.
+  `.agent-parity/scripts/pre-push.sh` to it.
 - **If agent-parity installed the hook and you now want your own checks**, put
   your own pre-push hook at that entry point and add a line that runs
-  `.agents/scripts/pre-push.sh` to it. Do not edit the hook agent-parity
+  `.agent-parity/scripts/pre-push.sh` to it. Do not edit the hook agent-parity
   installed, since install and update regenerate it and uninstall removes it.
 
 ### Caution
@@ -206,7 +206,7 @@ bounded network request for the latest-release field.
 The default cache is `$XDG_CACHE_HOME/agent-parity` (or
 `~/.cache/agent-parity`) on Unix and `%LOCALAPPDATA%\agent-parity\cache` on
 Windows; `AGENT_PARITY_CACHE` overrides it. `uninstall` leaves this shared
-cache alone. Claude artifacts are generated from `.agents/`: `.claude/skills/`
+cache alone. Claude artifacts are generated from the tracked source: `.claude/skills/`
 is ignored, while the generated `.claude/settings.json` is committed so a
 fresh pull already contains the hooks needed to regenerate it. If the project's
 `.gitignore` would hide the tracked wiring, `install` maintains a marker block
@@ -291,10 +291,10 @@ pre-push hook refuses a push while any managed file is uncommitted (see
 
 Drop standard Agent Skills (`<name>/SKILL.md`) into `.agents/skills/`. Codex,
 Cursor, and Antigravity CLI load them from there directly. For Claude Code, the
-installed SessionStart hook calls `.agents/bin/agent-parity sync-claude`; the
+installed SessionStart hook calls `.agent-parity/bin/agent-parity sync-claude`; the
 project-local launcher selects `sync-claude.sh` on Unix or `sync-claude.ps1` on
 Windows. That recreates `.claude/skills` and `.claude/settings.json`
-from the `.agents/` source at the start of every session. A separate Claude
+from the tracked source at the start of every session. A separate Claude
 SessionStart hook runs MCP self-heal independently. Edit only the source;
 the generated copy is disposable.
 `.claude/settings.local.json` is never touched, so machine-local settings stay
@@ -310,23 +310,23 @@ your own skills, not these.
 
 | Path | Contents |
 | --- | --- |
-| `.agents/mcp/memory/` | memory server launchers plus pinned `VERSION` and `RELEASE` metadata; no binaries |
-| `.agents/memory/` | the memory store: one markdown file per memory |
+| `.agent-parity/mcp/memory/` | memory server launchers plus pinned `VERSION` and `RELEASE` metadata; no binaries |
+| `.agent-parity/memory/` | the memory store: one markdown file per memory |
 | `.agents/skills/` | shared skills source (yours to fill) |
 | `.agents/skills/agent-parity/` | managed skill for running the management commands from any agent |
 | `.agents/skills/write-requirement/` | managed skill for turning a request into a testable requirement |
 | `.agents/skills/write-governance/` | managed skill for writing a standing project rule |
-| `.agents/bin/` | project-local launchers (`agent-parity`, `agent-parity.cmd`) |
-| `.agents/scripts/common.{sh,ps1}` | shared functions used by the local management commands |
-| `.agents/scripts/{status,version,uninstall}.{sh,ps1}` | separate project-local management commands |
-| `.agents/scripts/sync-claude.{sh,ps1}` | sync script that mirrors skills into `.claude` |
-| `.agents/scripts/self-heal.{sh,ps1}` | retargets managed MCP registrations to the current OS launcher |
-| `.agents/scripts/merge-memory.sh` | git merge driver that resolves concurrent memory recalls |
-| `.agents/scripts/pre-push.sh` | pre-push guard that blocks a push while managed files are uncommitted |
-| `.agents/claude/settings.json` | Claude settings source with the platform-neutral sync hook |
+| `.agent-parity/bin/` | project-local launchers (`agent-parity`, `agent-parity.cmd`) |
+| `.agent-parity/scripts/common.{sh,ps1}` | shared functions used by the local management commands |
+| `.agent-parity/scripts/{status,version,uninstall}.{sh,ps1}` | separate project-local management commands |
+| `.agent-parity/scripts/sync-claude.{sh,ps1}` | sync script that mirrors skills into `.claude` |
+| `.agent-parity/scripts/self-heal.{sh,ps1}` | retargets managed MCP registrations to the current OS launcher |
+| `.agent-parity/scripts/merge-memory.sh` | git merge driver that resolves concurrent memory recalls |
+| `.agent-parity/scripts/pre-push.sh` | pre-push guard that blocks a push while managed files are uncommitted |
+| `.agent-parity/claude/settings.json` | Claude settings source with the platform-neutral sync hook |
 | `.agents/mcp_config.json` | memory server registered for Antigravity CLI |
 | `.agents/hooks.json` | Antigravity self-heal hook |
-| `.claude/settings.json` | generated Claude settings bootstrap; committed and refreshed from `.agents/claude/settings.json` |
+| `.claude/settings.json` | generated Claude settings bootstrap; committed and refreshed from `.agent-parity/claude/settings.json` |
 | `.claude/skills/` | generated Claude skill mirror; ignored by Git and refreshed at session start |
 | `.codex/config.toml` | memory server registered for Codex |
 | `.codex/hooks.json` | Codex session-start self-heal hook (requires trust) |
@@ -343,7 +343,7 @@ your own skills, not these.
 `agent-parity update`, the project launcher downloads the latest release's
 version-stamped `update.sh` / `update.ps1` asset. That embedded version selects
 the matching Raw templates and config-editor asset; it also pins the MCP
-launcher metadata to that release. No updater is kept in `.agents/scripts`.
+launcher metadata to that release. No updater is kept in `.agent-parity/scripts`.
 
 `uninstall` is fully offline and never starts the MCP launcher. Windows
 and Unix both use the verified `agent-parity-config` editor installed in the

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# git merge driver for .agents/memory/*.md: resolves the platform config
+# git merge driver for .agent-parity/memory/*.md: resolves the platform config
 # editor from the shared cache and delegates the 3-way merge to it. git runs
 # merge drivers through sh on every platform (Git for Windows bundles one),
 # so this single script serves all OSes. It stays offline: the session-start
@@ -11,7 +11,7 @@ set -eu
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 target=$(CDPATH= cd -- "$here/../.." && pwd)
 
-version_file="$target/.agents/mcp/memory/VERSION"
+version_file="$target/.agent-parity/mcp/memory/VERSION"
 [ -f "$version_file" ] || { echo "merge-memory: missing $version_file" >&2; exit 1; }
 version=$(tr -d '\r\n' < "$version_file")
 

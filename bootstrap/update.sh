@@ -8,15 +8,15 @@ PACKAGED_VERSION="dev"
 RAW="${AGENT_PARITY_RAW:-}"
 RELEASE="${AGENT_PARITY_RELEASE:-}"
 VERSION="${AGENT_PARITY_VERSION:-}"
-SERVER_DIR=".agents/mcp/memory"
-STORE_DIR=".agents/memory"
-PROJECT_CLI_DIR=".agents/bin"
-SYNC_SCRIPT=".agents/scripts/sync-claude.sh"
-CLAUDE_SRC=".agents/claude/settings.json"
+SERVER_DIR=".agent-parity/mcp/memory"
+STORE_DIR=".agent-parity/memory"
+PROJECT_CLI_DIR=".agent-parity/bin"
+SYNC_SCRIPT=".agent-parity/scripts/sync-claude.sh"
+CLAUDE_SRC=".agent-parity/claude/settings.json"
 CLAUDE_TGT=".claude/settings.json"
 # SessionStart runs through the project-local launcher. Claude chooses the host
 # shell; the launcher absorbs the Unix/Windows difference.
-CLAUDE_HOOK='.agents/bin/agent-parity sync-claude'
+CLAUDE_HOOK='.agent-parity/bin/agent-parity sync-claude'
 MARK_BEGIN="<!-- agent-parity:begin -->"
 MARK_END="<!-- agent-parity:end -->"
 GI_BEGIN="# agent-parity:begin"
@@ -24,21 +24,20 @@ GI_END="# agent-parity:end"
 # Memory files rarely change after creation, but an explicit edit on both
 # sides can conflict; a bundled git merge driver unions tags and resolves a
 # one-sided body edit instead of leaving conflict markers to the user.
-MERGE_DRIVER_CMD='.agents/scripts/merge-memory.sh %O %A %B'
-GA_LINE=".agents/memory/*.md merge=agent-parity-memory"
+MERGE_DRIVER_CMD='.agent-parity/scripts/merge-memory.sh %O %A %B'
+GA_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
 # Marks the pre-push hook we own, so we update ours but never clobber a
 # hook the user wrote.
 PRE_PUSH_MARKER='# agent-parity managed pre-push hook'
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.
-ARTIFACTS=".mcp.json .cursor .codex .agents AGENTS.md CLAUDE.md"
+ARTIFACTS=".mcp.json .cursor .codex .agents .agent-parity AGENTS.md CLAUDE.md"
 # Manifest diff: everything older supported releases created that the current
 # release no longer manages -- the union of their manifests minus the current
 # one. install/update remove these after converging; drop an entry only when
 # the support floor rises past the release that retired it.
-#   retired in v0.6.0: vendored binaries, replaced by the per-version cache
-#   retired in v0.6.0: the PowerShell CLI entry, folded into agent-parity.cmd
-TOMBSTONES=".agents/mcp/memory/dist .agents/bin/agent-parity.ps1"
+#   retired in v0.9.0: the .agents/ tooling dirs, moved under .agent-parity/
+TOMBSTONES=".agents/mcp .agents/bin .agents/scripts .agents/claude"
 # Cursor CLI reads .cursor/cli.json for tool permissions. It is wired on its
 # own, outside the MCP config list.
 CURSOR_CLI=".cursor/cli.json"
@@ -127,10 +126,10 @@ platform() {
 # Calls "$1 <path relative to target> <template in repo> <registered-marker>"
 # once per MCP config file.
 for_each_mcp_config() {
-  "$1" ".mcp.json"               templates/claude.mcp.json              ".agents/mcp/memory/run.sh"
-  "$1" ".cursor/mcp.json"        templates/cursor.mcp.json              ".agents/mcp/memory/run.sh"
-  "$1" ".codex/config.toml"      templates/codex.config.toml            ".agents/mcp/memory/run.sh"
-  "$1" ".agents/mcp_config.json" templates/antigravity.mcp_config.json  ".agents/mcp/memory/run.sh"
+  "$1" ".mcp.json"               templates/claude.mcp.json              ".agent-parity/mcp/memory/run.sh"
+  "$1" ".cursor/mcp.json"        templates/cursor.mcp.json              ".agent-parity/mcp/memory/run.sh"
+  "$1" ".codex/config.toml"      templates/codex.config.toml            ".agent-parity/mcp/memory/run.sh"
+  "$1" ".agents/mcp_config.json" templates/antigravity.mcp_config.json  ".agent-parity/mcp/memory/run.sh"
 }
 
 installed_version() {
@@ -145,6 +144,25 @@ remove_tombstones() {
     rm -rf "$TARGET/$tombstone"
     echo "legacy: removed $tombstone"
   done
+}
+
+# The memory store holds user data, so a pre-v0.9.0 store (.agents/memory) is
+# moved into the new location, never deleted and recreated. Files are moved one
+# by one without clobbering, then the emptied old dir is removed.
+migrate_store() {
+  old="$TARGET/.agents/memory"
+  new="$TARGET/$STORE_DIR"
+  [ -d "$old" ] || return 0
+  [ "$old" = "$new" ] && return 0
+  mkdir -p "$new"
+  moved=0
+  for f in "$old"/*.md; do
+    [ -e "$f" ] || continue
+    base=$(basename "$f")
+    [ -e "$new/$base" ] || { mv "$f" "$new/$base"; moved=$((moved + 1)); }
+  done
+  rmdir "$old" 2>/dev/null || true
+  [ "$moved" -eq 0 ] || echo "memory store: migrated $moved file(s) to $STORE_DIR"
 }
 
 # Other versions' caches are re-downloadable derivatives, so pruning cannot
@@ -184,7 +202,7 @@ esac
 
 install_project_cli() {
   d="$TARGET/$PROJECT_CLI_DIR"
-  s="$TARGET/.agents/scripts"
+  s="$TARGET/.agent-parity/scripts"
   mkdir -p "$d" "$s"
   fetch_to templates/project-agent-parity.sh "$d/agent-parity" executable
   fetch_to templates/project-agent-parity.cmd "$d/agent-parity.cmd" executable
@@ -251,10 +269,10 @@ reg_mcp_config() {
     mkdir -p "$(dirname "$t")"
     printf '%s\n' "$c" > "$t"
     echo "  wrote:      $1"
-  elif [ "$3" = ".agents/mcp/memory/run.sh" ]; then
+  elif [ "$3" = ".agent-parity/mcp/memory/run.sh" ]; then
     current=$("$CONFIG_EDITOR" command "$t" 2>&1) || code=$?
     code=${code:-0}
-    if [ "$code" -eq 0 ] && { [ "$current" = ".agents/mcp/memory/run.sh" ] || [ "$current" = ".agents/mcp/memory/run.cmd" ]; }; then
+    if [ "$code" -eq 0 ] && { [ "$current" = ".agent-parity/mcp/memory/run.sh" ] || [ "$current" = ".agent-parity/mcp/memory/run.cmd" ] || [ "$current" = ".agents/mcp/memory/run.sh" ] || [ "$current" = ".agents/mcp/memory/run.cmd" ]; }; then
       if result=$("$CONFIG_EDITOR" ensure "$t" "$3" 2>&1); then
         if [ "$result" = changed ]; then echo "  updated:    $1 (managed registration and approvals)"; else echo "  registered: $1 (already)"; fi
       else
@@ -429,7 +447,7 @@ reg_pre_push_hook() {
   in_git_repo || return 0
   hook=$(pre_push_hook_path) || return 0
   if [ -e "$hook" ] && ! grep -qF "$PRE_PUSH_MARKER" "$hook" 2>/dev/null; then
-    echo "git: a pre-push hook is already in place -- call .agents/scripts/pre-push.sh from it to guard managed files"
+    echo "git: a pre-push hook is already in place -- call .agent-parity/scripts/pre-push.sh from it to guard managed files"
     return 0
   fi
   mkdir -p "$(dirname "$hook")"
@@ -437,8 +455,8 @@ reg_pre_push_hook() {
 #!/bin/sh
 $PRE_PUSH_MARKER
 # Managed file, regenerated by install/update. To add your own checks, put your
-# own pre-push hook here and run .agents/scripts/pre-push.sh from it.
-exec "\$(git rev-parse --show-toplevel)/.agents/scripts/pre-push.sh"
+# own pre-push hook here and run .agent-parity/scripts/pre-push.sh from it.
+exec "\$(git rev-parse --show-toplevel)/.agent-parity/scripts/pre-push.sh"
 EOF
   chmod +x "$hook"
   echo "git: pre-push guard registered (.git/hooks/pre-push)"
@@ -626,7 +644,9 @@ warn_parity() {
 }
 
 cmd_update() {
-  if [ ! -d "$TARGET/$SERVER_DIR" ]; then
+  # Accept the pre-v0.9.0 layout too (server under .agents/): an update from it
+  # installs into the new location and tombstones the old tooling dirs.
+  if [ ! -d "$TARGET/$SERVER_DIR" ] && [ ! -d "$TARGET/.agents/mcp/memory" ]; then
     echo "nothing to update: $TARGET/$SERVER_DIR not found -- run install first" >&2
     exit 1
   fi
@@ -635,6 +655,7 @@ cmd_update() {
     echo "already up to date: $old"
     return
   fi
+  migrate_store
   install_server
   install_project_cli
   install_config_editor

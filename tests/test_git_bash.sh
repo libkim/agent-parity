@@ -9,18 +9,18 @@ esac
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-git-bash.XXXXXX")
 trap 'rm -rf "$root"' EXIT HUP INT TERM
-mkdir -p "$root/.agents/bin"
-cp "$repo/templates/project-agent-parity.sh" "$root/.agents/bin/agent-parity"
-cat > "$root/.agents/bin/agent-parity.cmd" <<'EOF'
+mkdir -p "$root/.agent-parity/bin"
+cp "$repo/templates/project-agent-parity.sh" "$root/.agent-parity/bin/agent-parity"
+cat > "$root/.agent-parity/bin/agent-parity.cmd" <<'EOF'
 @echo off
 > "%~dp0dispatch.txt" echo %*
 exit /b 0
 EOF
 
 for command in sync-claude self-heal update uninstall status version; do
-  rm -f "$root/.agents/bin/dispatch.txt"
-  env -u OS sh "$root/.agents/bin/agent-parity" "$command"
-  actual=$(tr -d '\r\n' < "$root/.agents/bin/dispatch.txt")
+  rm -f "$root/.agent-parity/bin/dispatch.txt"
+  env -u OS sh "$root/.agent-parity/bin/agent-parity" "$command"
+  actual=$(tr -d '\r\n' < "$root/.agent-parity/bin/dispatch.txt")
   [ "$actual" = "$command" ] || { echo "$command dispatched as: $actual" >&2; exit 1; }
 done
 

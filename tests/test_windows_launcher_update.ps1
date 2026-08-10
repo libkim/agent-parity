@@ -3,10 +3,10 @@ $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $root = Join-Path $tempBase ("agent-parity-launcher-" + [Guid]::NewGuid().ToString("N"))
-New-Item -ItemType Directory -Path (Join-Path $root ".agents\bin") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $root ".agent-parity\bin") -Force | Out-Null
 
 try {
-  $launcher = Join-Path $root ".agents\bin\agent-parity.cmd"
+  $launcher = Join-Path $root ".agent-parity\bin\agent-parity.cmd"
   $source = [IO.File]::ReadAllText((Join-Path $repo "templates\project-agent-parity.cmd"), [Text.Encoding]::UTF8)
   $downloadCommand = '  powershell -NoProfile -ExecutionPolicy Bypass -File "%agent_parity_bin%fake-update.ps1" "%AGENT_PARITY_TARGET%"'
   $source = [regex]::Replace($source, '(?m)^  powershell -NoProfile -ExecutionPolicy Bypass -Command .*$', $downloadCommand)
@@ -18,9 +18,9 @@ try {
   $fakeUpdate = @"
 param([string]`$Target)
 `$bytes = [Convert]::FromBase64String('$encoded')
-[IO.File]::WriteAllBytes((Join-Path `$Target '.agents\bin\agent-parity.cmd.new'), `$bytes)
+[IO.File]::WriteAllBytes((Join-Path `$Target '.agent-parity\bin\agent-parity.cmd.new'), `$bytes)
 "@
-  [IO.File]::WriteAllText((Join-Path $root ".agents\bin\fake-update.ps1"), $fakeUpdate, (New-Object Text.UTF8Encoding($false)))
+  [IO.File]::WriteAllText((Join-Path $root ".agent-parity\bin\fake-update.ps1"), $fakeUpdate, (New-Object Text.UTF8Encoding($false)))
 
   & cmd.exe /d /c "`"$launcher`" update"
   if ($LASTEXITCODE -ne 0) { throw "launcher update exited with $LASTEXITCODE" }

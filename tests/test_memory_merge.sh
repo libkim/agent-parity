@@ -14,10 +14,10 @@ tests_platform
 root=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-merge.XXXXXX")
 trap 'rm -rf "$root"' EXIT HUP INT TERM
 
-mkdir -p "$root/.agents/scripts" "$root/.agents/mcp/memory" "$root/.agents/memory"
-cp "$repo/templates/merge-memory.sh" "$root/.agents/scripts/merge-memory.sh"
-chmod +x "$root/.agents/scripts/merge-memory.sh"
-printf '%s\n' "$version" > "$root/.agents/mcp/memory/VERSION"
+mkdir -p "$root/.agent-parity/scripts" "$root/.agent-parity/mcp/memory" "$root/.agent-parity/memory"
+cp "$repo/templates/merge-memory.sh" "$root/.agent-parity/scripts/merge-memory.sh"
+chmod +x "$root/.agent-parity/scripts/merge-memory.sh"
+printf '%s\n' "$version" > "$root/.agent-parity/mcp/memory/VERSION"
 
 cache="$root/cache"
 mkdir -p "$cache/config/$version"
@@ -29,10 +29,10 @@ git -C "$root" init -q -b main
 git -C "$root" config user.email test@example.com
 git -C "$root" config user.name test
 git -C "$root" config core.autocrlf false
-git -C "$root" config merge.agent-parity-memory.driver '.agents/scripts/merge-memory.sh %O %A %B'
-printf '.agents/memory/*.md merge=agent-parity-memory\n' > "$root/.gitattributes"
+git -C "$root" config merge.agent-parity-memory.driver '.agent-parity/scripts/merge-memory.sh %O %A %B'
+printf '.agent-parity/memory/*.md merge=agent-parity-memory\n' > "$root/.gitattributes"
 
-mem="$root/.agents/memory/100.md"
+mem="$root/.agent-parity/memory/100.md"
 write_mem() {
   cat > "$mem" <<EOF
 ---
@@ -69,7 +69,7 @@ if grep -q '^strength:' "$mem"; then echo "strength not dropped from merge outpu
 if grep -q '^lastAccessed:' "$mem"; then echo "lastAccessed not dropped from merge output" >&2; exit 1; fi
 
 # Bodies edited to different content on both sides must still conflict.
-mem2="$root/.agents/memory/200.md"
+mem2="$root/.agent-parity/memory/200.md"
 mem_saved=$mem; mem=$mem2
 write_mem 1 "    - a" "2026-07-02T00:00:00Z" "old body"
 git -C "$root" add -A
@@ -86,7 +86,7 @@ if git -C "$root" merge -q --no-edit side2 2>/dev/null; then
   echo "conflicting bodies merged silently" >&2
   exit 1
 fi
-git -C "$root" status --porcelain | grep -q '^UU .agents/memory/200.md'
+git -C "$root" status --porcelain | grep -q '^UU .agent-parity/memory/200.md'
 git -C "$root" merge --abort
 
 echo "memory merge driver: OK"

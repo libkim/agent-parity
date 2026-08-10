@@ -114,7 +114,7 @@ jobs:
           target=$(mktemp -d)
           cd "$target"
           curl -fsSL https://github.com/libkim/agent-parity/releases/latest/download/install.sh | sh
-          test "$(tr -d '\r\n' < .agents/mcp/memory/VERSION)" = "${{ inputs.version || github.ref_name }}"
+          test "$(tr -d '\r\n' < .agent-parity/mcp/memory/VERSION)" = "${{ inputs.version || github.ref_name }}"
 
   smoke-windows:
     needs: release
@@ -148,7 +148,7 @@ jobs:
             } finally {
               Pop-Location
             }
-            $installed = [IO.File]::ReadAllText((Join-Path $target ".agents\mcp\memory\VERSION")).Trim()
+            $installed = [IO.File]::ReadAllText((Join-Path $target ".agent-parity\mcp\memory\VERSION")).Trim()
             if ($installed -ne "${{ inputs.version || github.ref_name }}") { throw "installed $installed" }
           } finally {
             if ($target.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase)) {

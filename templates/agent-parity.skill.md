@@ -8,8 +8,8 @@ description: Run agent-parity project management commands (status, version, upda
 Run the project-local management command from the repository root, picking the
 invocation for the current operating system:
 
-- Linux, macOS, or WSL: `./.agents/bin/agent-parity <command>`
-- Windows PowerShell: `.\.agents\bin\agent-parity.cmd <command>`
+- Linux, macOS, or WSL: `./.agent-parity/bin/agent-parity <command>`
+- Windows PowerShell: `.\.agent-parity\bin\agent-parity.cmd <command>`
 
 Commands:
 
