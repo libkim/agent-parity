@@ -35,6 +35,26 @@ for config in .mcp.json .cursor/mcp.json .codex/config.toml .agents/mcp_config.j
   [ "$("$editor" command "$root/$config")" = ".agent-parity/mcp/memory/run.sh" ]
 done
 
+# A per-agent run (the shape each SessionStart hook uses) repairs only the
+# config that agent reads; the other three keep their launcher so a different-OS
+# agent sharing this working tree is not clobbered.
+cat > "$root/.mcp.json" <<'EOF'
+{"mcpServers":{"memory":{"command":".agent-parity/mcp/memory/run.cmd"}}}
+EOF
+cp "$root/.mcp.json" "$root/.cursor/mcp.json"
+cp "$root/.mcp.json" "$root/.agents/mcp_config.json"
+cat > "$root/.codex/config.toml" <<'EOF'
+[mcp_servers.memory]
+command = ".agent-parity/mcp/memory/run.cmd"
+EOF
+AGENT_PARITY_CACHE="$cache" sh "$root/.agent-parity/scripts/self-heal.sh" cursor >/dev/null
+[ "$("$editor" command "$root/.cursor/mcp.json")" = ".agent-parity/mcp/memory/run.sh" ]
+for other in .mcp.json .codex/config.toml .agents/mcp_config.json; do
+  [ "$("$editor" command "$root/$other")" = ".agent-parity/mcp/memory/run.cmd" ]
+done
+# Reconverge every config for this OS so the silent-rerun check below holds.
+AGENT_PARITY_CACHE="$cache" sh "$root/.agent-parity/scripts/self-heal.sh" >/dev/null
+
 # Warm caches (config editor and pre-warmed binary) must not touch the release
 # URL and an unchanged repair is silent -- any network attempt against the
 # invalid URL would fail and print a notice.

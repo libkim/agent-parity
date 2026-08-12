@@ -76,10 +76,10 @@ try {
   $cursor = Get-Content -LiteralPath (Join-Path $testRoot ".cursor\cli.json") -Raw | ConvertFrom-Json
   if ($cursor.theme -ne "dark" -or $cursor.permissions.allow -notcontains "Shell(git:*)" -or $cursor.permissions.allow -notcontains "Mcp(memory:*)") { throw "install did not preserve and merge Cursor CLI settings" }
   $cursorHooks = Get-Content -LiteralPath (Join-Path $testRoot ".cursor\hooks.json") -Raw | ConvertFrom-Json
-  if ($cursorHooks.hooks.sessionStart[0].command -ne ".agent-parity/bin/agent-parity self-heal") { throw "Cursor hook is not platform-neutral" }
+  if ($cursorHooks.hooks.sessionStart[0].command -ne ".agent-parity/bin/agent-parity self-heal cursor") { throw "Cursor hook is not platform-neutral" }
   $antigravityHooks = Get-Content -LiteralPath (Join-Path $testRoot ".agents\hooks.json") -Raw | ConvertFrom-Json
   if ($null -ne $antigravityHooks.PreInvocation) { throw "Antigravity hook uses the obsolete root event shape" }
-  if ($antigravityHooks.'agent-parity'.enabled -ne $true -or $antigravityHooks.'agent-parity'.PreInvocation[0].command -ne ".agent-parity/bin/agent-parity self-heal") {
+  if ($antigravityHooks.'agent-parity'.enabled -ne $true -or $antigravityHooks.'agent-parity'.PreInvocation[0].command -ne ".agent-parity/bin/agent-parity self-heal antigravity") {
     throw "Antigravity managed hook block is missing or not platform-neutral"
   }
   $agentsText = [IO.File]::ReadAllText((Join-Path $testRoot "AGENTS.md"))

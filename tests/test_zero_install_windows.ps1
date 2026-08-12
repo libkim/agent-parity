@@ -46,6 +46,22 @@ try {
     if ($command -ne ".agent-parity/mcp/memory/run.cmd") { throw "self-heal did not retarget $config" }
   }
 
+  # A per-agent run (the shape each SessionStart hook uses) repairs only the
+  # config that agent reads; the other three keep their launcher so a
+  # different-OS agent sharing this working tree is not clobbered.
+  $shJson = '{"mcpServers":{"memory":{"command":".agent-parity/mcp/memory/run.sh"}}}'
+  [IO.File]::WriteAllText("$root\.mcp.json", $shJson)
+  [IO.File]::WriteAllText("$root\.cursor\mcp.json", $shJson)
+  [IO.File]::WriteAllText("$root\.agents\mcp_config.json", $shJson)
+  [IO.File]::WriteAllText("$root\.codex\config.toml", "[mcp_servers.memory]`ncommand = `".agent-parity/mcp/memory/run.sh`"`n")
+  & "$root\.agent-parity\scripts\self-heal.ps1" cursor | Out-Null
+  if ((& $editor command "$root\.cursor\mcp.json" | Out-String).Trim() -ne ".agent-parity/mcp/memory/run.cmd") { throw "per-agent self-heal did not repair its own config" }
+  foreach ($other in @(".mcp.json", ".codex\config.toml", ".agents\mcp_config.json")) {
+    if ((& $editor command "$root\$other" | Out-String).Trim() -ne ".agent-parity/mcp/memory/run.sh") { throw "per-agent self-heal clobbered $other" }
+  }
+  # Reconverge every config for this OS so the silent-rerun check below holds.
+  & "$root\.agent-parity\scripts\self-heal.ps1" | Out-Null
+
   # Warm caches (config editor and pre-warmed binary) must not touch the
   # release URL: any attempt against the invalid URL would fail and notice.
   [IO.File]::WriteAllText("$root\.agent-parity\mcp\memory\RELEASE", "https://invalid.agent-parity.test`n")

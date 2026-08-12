@@ -791,10 +791,10 @@ func TestUnmergePreservesWrongTypedSharedContainers(t *testing.T) {
 
 func TestPortableHooksMigrateExactV060Commands(t *testing.T) {
 	tests := []struct {
-		kind, original string
+		kind, original, want string
 	}{
-		{"cursor", `{"version":1,"hooks":{"sessionStart":[{"command":".agents/bin/agent-parity.cmd self-heal","timeout":30}]}}`},
-		{"antigravity", `{"enabled":true,"PreInvocation":[{"command":".agents/bin/agent-parity.cmd self-heal","timeout":30}]}`},
+		{"cursor", `{"version":1,"hooks":{"sessionStart":[{"command":".agents/bin/agent-parity.cmd self-heal","timeout":30}]}}`, ".agent-parity/bin/agent-parity self-heal cursor"},
+		{"antigravity", `{"enabled":true,"PreInvocation":[{"command":".agents/bin/agent-parity.cmd self-heal","timeout":30}]}`, ".agent-parity/bin/agent-parity self-heal antigravity"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.kind, func(t *testing.T) {
@@ -809,7 +809,7 @@ func TestPortableHooksMigrateExactV060Commands(t *testing.T) {
 			if strings.Contains(string(raw), `"command": ".agents/bin/agent-parity.cmd self-heal"`) {
 				t.Fatalf("v0.6.0 Windows-only hook was not migrated:\n%s", raw)
 			}
-			if !strings.Contains(string(raw), `"command": ".agent-parity/bin/agent-parity self-heal"`) {
+			if !strings.Contains(string(raw), `"command": "`+tc.want+`"`) {
 				t.Fatalf("platform-neutral hook missing:\n%s", raw)
 			}
 			if tc.kind == "antigravity" {

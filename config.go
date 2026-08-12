@@ -1473,15 +1473,17 @@ func hookSpec(kind string) (agentHookSpec, error) {
 	switch kind {
 	case "claude":
 		return agentHookSpec{
-			event: "SessionStart", command: `.agent-parity/bin/agent-parity self-heal`, nested: true,
-			legacyCommands: []string{`.agents/bin/agent-parity self-heal`, `.agents/bin/agent-parity.cmd self-heal`},
+			event: "SessionStart", command: `.agent-parity/bin/agent-parity self-heal claude`, nested: true,
+			legacyCommands: []string{`.agent-parity/bin/agent-parity self-heal`, `.agents/bin/agent-parity self-heal`, `.agents/bin/agent-parity.cmd self-heal`},
 		}, nil
 	case "codex":
 		return agentHookSpec{
 			event: "SessionStart", nested: true,
-			command:        `sh -c 'root=$(git rev-parse --show-toplevel) && exec "$root/.agent-parity/bin/agent-parity" self-heal'`,
-			commandWindows: `powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) '.agent-parity/bin/agent-parity.cmd') self-heal"`,
+			command:        `sh -c 'root=$(git rev-parse --show-toplevel) && exec "$root/.agent-parity/bin/agent-parity" self-heal codex'`,
+			commandWindows: `powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) '.agent-parity/bin/agent-parity.cmd') self-heal codex"`,
 			legacyCommands: []string{
+				`sh -c 'root=$(git rev-parse --show-toplevel) && exec "$root/.agent-parity/bin/agent-parity" self-heal'`,
+				`powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) '.agent-parity/bin/agent-parity.cmd') self-heal"`,
 				`sh -c 'root=$(git rev-parse --show-toplevel) && exec "$root/.agents/bin/agent-parity" self-heal'`,
 				`powershell -NoProfile -ExecutionPolicy Bypass -Command "& (Join-Path (git rev-parse --show-toplevel) '.agents/bin/agent-parity.cmd') self-heal"`,
 			},
@@ -1489,14 +1491,14 @@ func hookSpec(kind string) (agentHookSpec, error) {
 	case "cursor":
 		return agentHookSpec{
 			event: "sessionStart", container: "hooks",
-			command:        ".agent-parity/bin/agent-parity self-heal",
-			legacyCommands: []string{".agents/bin/agent-parity self-heal", ".agents/bin/agent-parity.cmd self-heal"},
+			command:        ".agent-parity/bin/agent-parity self-heal cursor",
+			legacyCommands: []string{".agent-parity/bin/agent-parity self-heal", ".agents/bin/agent-parity self-heal", ".agents/bin/agent-parity.cmd self-heal"},
 		}, nil
 	case "antigravity":
 		return agentHookSpec{
 			event: "PreInvocation", container: "agent-parity",
-			command:        ".agent-parity/bin/agent-parity self-heal",
-			legacyCommands: []string{".agents/bin/agent-parity self-heal", ".agents/bin/agent-parity.cmd self-heal"},
+			command:        ".agent-parity/bin/agent-parity self-heal antigravity",
+			legacyCommands: []string{".agent-parity/bin/agent-parity self-heal", ".agents/bin/agent-parity self-heal", ".agents/bin/agent-parity.cmd self-heal"},
 		}, nil
 	default:
 		return agentHookSpec{}, fmt.Errorf("unsupported hook kind: %s", kind)
@@ -1678,6 +1680,7 @@ func unmergeAgentHook(path, kind string) error {
 			return nil
 		}
 		keptGroups := []any{}
+		managedCommands := agentHookCommands(spec, spec.command, spec.commandWindows)
 		for _, group := range groups {
 			gm, ok := group.(map[string]any)
 			if !ok {
@@ -1694,7 +1697,7 @@ func unmergeAgentHook(path, kind string) error {
 			for _, handler := range handlers {
 				hm, _ := handler.(map[string]any)
 				cmd, _ := hm["command"].(string)
-				if isSelfHealCommand(cmd, spec.command, spec.commandWindows) {
+				if isSelfHealCommand(cmd, managedCommands...) {
 					removed = true
 					continue
 				}
