@@ -95,9 +95,17 @@ jobs:
         with:
           files: dist/*
 
-  smoke-linux:
+  # The POSIX installer is one script, but Linux and macOS differ in the /bin/sh
+  # implementation (dash vs bash), BSD vs GNU tools (stat/shasum), and the
+  # per-OS/arch binary that must actually run. Smoke the published install on
+  # every unix platform the build matrix targets, not just Linux.
+  smoke-posix:
     needs: release
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Wait for latest install asset
         run: |
@@ -111,7 +119,7 @@ jobs:
           exit 1
       - name: Run README install command
         run: |
-          target=$(mktemp -d)
+          target=$(mktemp -d "${TMPDIR:-/tmp}/ap-smoke.XXXXXX")
           cd "$target"
           curl -fsSL https://github.com/libkim/agent-parity/releases/latest/download/install.sh | sh
           test "$(tr -d '\r\n' < .agent-parity/mcp/memory/VERSION)" = "${{ inputs.version || github.ref_name }}"
