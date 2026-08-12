@@ -20,8 +20,8 @@ case "$1" in
     ;;
   self-heal)
     shift
-    [ "$#" -eq 0 ] || { echo "usage: agent-parity self-heal" >&2; exit 2; }
-    exec "$target/.agent-parity/scripts/self-heal.sh"
+    [ "$#" -le 1 ] || { echo "usage: agent-parity self-heal [agent]" >&2; exit 2; }
+    exec "$target/.agent-parity/scripts/self-heal.sh" "$@"
     ;;
   update)
     shift

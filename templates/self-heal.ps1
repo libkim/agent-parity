@@ -1,6 +1,10 @@
-param()
+param([string]$Agent = "")
 
 $ErrorActionPreference = "Stop"
+if ($Agent -notin @("", "claude", "cursor", "codex", "antigravity")) {
+  [Console]::Error.WriteLine("self-heal: unknown agent '$Agent'")
+  exit 2
+}
 $target = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 . (Join-Path $PSScriptRoot "common.ps1") -Target $target
 $editor = $ConfigEditor
@@ -21,7 +25,17 @@ try { Ensure-LocalConfigEditor } catch {
 }
 
 if ($editorOk) {
-  foreach ($rel in @(".mcp.json", ".cursor/mcp.json", ".codex/config.toml", ".agents/mcp_config.json")) {
+  # Repair only the config this agent reads; leave the others so a different-OS
+  # agent sharing this working tree keeps its own launcher. No agent argument
+  # (a manual run) heals every config for the current OS.
+  $configs = switch ($Agent) {
+    "claude"      { @(".mcp.json") }
+    "cursor"      { @(".cursor/mcp.json") }
+    "codex"       { @(".codex/config.toml") }
+    "antigravity" { @(".agents/mcp_config.json") }
+    default       { @(".mcp.json", ".cursor/mcp.json", ".codex/config.toml", ".agents/mcp_config.json") }
+  }
+  foreach ($rel in $configs) {
     $path = Join-Path $target ($rel.Replace('/', '\'))
     try {
       $result = & $editor ensure $path $desired 2>&1

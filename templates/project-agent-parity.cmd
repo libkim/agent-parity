@@ -9,11 +9,11 @@ if "%~1"=="sync-claude" (
   exit /b %ERRORLEVEL%
 )
 if "%~1"=="self-heal" (
-  if not "%~2"=="" (
-    echo usage: agent-parity self-heal 1>&2
+  if not "%~3"=="" (
+    echo usage: agent-parity self-heal [agent] 1>&2
     exit /b 2
   )
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%agent_parity_scripts%\self-heal.ps1"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%agent_parity_scripts%\self-heal.ps1" %~2
   exit /b %ERRORLEVEL%
 )
 if "%~1"=="update" goto remote_update
