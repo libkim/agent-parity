@@ -13,16 +13,18 @@
   </picture>
 </p>
 
-Every coding agent keeps its own memory, skills, and instructions, usually
-machine-local and outside the repo. So that context does not travel to another
-machine or a teammate, and switching agents means setting it all up again.
+A coding agent's memory usually lives on your machine, in your home directory
+rather than in the repo, so it never follows the project to another machine or a
+teammate. Skills and instructions can be committed and travel, but each agent
+keeps its own, so they drift as you switch agents.
 
-agent-parity fixes this by committing those three to the repo as **environment
-as code**. Because they live in the repo, cloning it to a new machine or handing
-it to a teammate brings that context along, and whoever receives it uses it from
-the next session, with no install command to run. With several agents, Claude
-Code, Codex, Cursor, and Antigravity share the same memory and read the same
-skills and instructions.
+agent-parity commits both to the repo as **environment as code**. The memory
+store lives in the repo, so cloning it to a new machine or handing it to a
+teammate carries the context along, and whoever receives it uses it from the
+next session with no install command to run; a bundled merge driver even
+reconciles edits made on two machines at once. Skills and instructions become
+one shared definition that Claude Code, Codex, Cursor, and Antigravity all read,
+so they stay consistent instead of diverging per agent.
 
 ## Features
 
@@ -272,6 +274,9 @@ Each memory is a markdown file with `created` and `tags` frontmatter.
 `memory_recent` returns the newest by `created`; `memory_search` matches tags
 and body keywords and ranks a tag match above a body-text match. Ranking is
 static, so reading never rewrites a file.
+
+agent-parity turns off the agent's built-in auto-memory, so an agent's memories
+land in this one shared store rather than the agent's own machine-local one.
 
 A memory has one of two types. **Context** (the default) is ordinary working
 memory, returned by `memory_recent` and `memory_search`. **Governance**
