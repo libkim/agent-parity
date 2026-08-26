@@ -41,5 +41,7 @@ rem Session-start hooks call "run.cmd prewarm" to fill the cache ahead of the
 rem real MCP launch; stop before starting the server.
 if "%~1"=="prewarm" exit /b 0
 
-if "%MEMORY_DIR%"=="" set "MEMORY_DIR=%HERE%..\..\..\.agents\memory"
+rem The store lives at <root>\.agent-parity\memory (%MEMORY_DIR% overrides). The
+rem launcher lives at <root>\.agent-parity\mcp\memory, so the root is three levels up.
+if "%MEMORY_DIR%"=="" set "MEMORY_DIR=%HERE%..\..\..\.agent-parity\memory"
 "%AGENT_PARITY_CACHE_BIN%" -dir "%MEMORY_DIR%" %*

@@ -35,7 +35,8 @@ source before tagging.
    go test -tags configeditor ./...
    VERSION=v0.0.0-ci bash build.sh
    for t in test_release_assets test_markers test_uninstall test_install_markers \
-            test_readme_install test_zero_install test_memory_merge test_update test_pre_push; do
+            test_readme_install test_zero_install test_memory_merge test_update \
+            test_pre_push test_launcher_store_dir; do
      sh tests/$t.sh v0.0.0-ci 2>/dev/null || sh tests/$t.sh
    done
    ```
