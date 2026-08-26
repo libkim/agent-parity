@@ -13,12 +13,16 @@
   </picture>
 </p>
 
-Every coding agent keeps its own memory, skills, and instruction files, so
-switching agents, or sharing a repo with teammates, means each one behaves
-differently and has to be set up again. agent-parity fixes that by making the shared environment (memory, skills,
-instructions) **environment as code** committed to the repo: install once
-and Claude Code, Codex, Cursor, and Antigravity share the same memory and read
-the same skills and instructions (`AGENTS.md`).
+Every coding agent keeps its own memory, skills, and instructions, usually
+machine-local and outside the repo. So that context does not travel to another
+machine or a teammate, and switching agents means setting it all up again.
+
+agent-parity fixes this by committing those three to the repo as **environment
+as code**. Because they live in the repo, cloning it to a new machine or handing
+it to a teammate brings that context along, and whoever receives it uses it from
+the next session, with no install command to run. With several agents, Claude
+Code, Codex, Cursor, and Antigravity share the same memory and read the same
+skills and instructions.
 
 ## Features
 
