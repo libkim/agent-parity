@@ -53,6 +53,14 @@ try {
   [IO.File]::WriteAllText((Join-Path $testRoot ".cursor\cli.json"), '{"theme":"dark","permissions":{"allow":["Shell(git:*)"]}}')
   [IO.File]::WriteAllText((Join-Path $testRoot "AGENTS.md"), "user instructions`n")
 
+  # Pre-v0.9.0 tooling dirs: agent-parity's own files plus a user file in
+  # .agents\scripts. Tombstone cleanup must drop our files and the emptied
+  # .agents\bin, but keep .agents\scripts because of the user file.
+  New-Item -ItemType Directory -Force -Path (Join-Path $testRoot ".agents\bin"), (Join-Path $testRoot ".agents\scripts") | Out-Null
+  [IO.File]::WriteAllText((Join-Path $testRoot ".agents\bin\agent-parity"), "old-launcher`n")
+  [IO.File]::WriteAllText((Join-Path $testRoot ".agents\scripts\common.sh"), "old-common`n")
+  [IO.File]::WriteAllText((Join-Path $testRoot ".agents\scripts\write_doc_review_reminder.py"), "my custom hook`n")
+
   $env:AGENT_PARITY_RAW = $base
   $env:AGENT_PARITY_RELEASE = "$base/dist"
   $env:AGENT_PARITY_VERSION = $null
@@ -70,6 +78,10 @@ try {
   if ($installedVersion -ne $Version) { throw "installed version is $installedVersion, expected $Version" }
   if (!(Test-Path -LiteralPath (Join-Path $testRoot ".agent-parity\bin\agent-parity.cmd") -PathType Leaf)) { throw "Windows launcher missing" }
   if (Test-Path -LiteralPath (Join-Path $testRoot "c\memory") -PathType Container) { throw "install eagerly downloaded memory-mcp" }
+
+  if (!(Test-Path -LiteralPath (Join-Path $testRoot ".agents\scripts\write_doc_review_reminder.py") -PathType Leaf)) { throw "tombstone deleted a user file" }
+  if (Test-Path -LiteralPath (Join-Path $testRoot ".agents\scripts\common.sh")) { throw "tombstone left agent-parity's own file behind" }
+  if (Test-Path -LiteralPath (Join-Path $testRoot ".agents\bin")) { throw "emptied legacy .agents\bin not removed" }
 
   $mcp = Get-Content -LiteralPath (Join-Path $testRoot ".mcp.json") -Raw | ConvertFrom-Json
   if (!$mcp.user -or !$mcp.mcpServers.other -or !$mcp.mcpServers.memory) { throw "install did not preserve and merge MCP settings" }

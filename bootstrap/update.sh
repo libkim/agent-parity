@@ -138,11 +138,42 @@ installed_version() {
   tr -d '\r\n' < "$version_file"
 }
 
+# Files agent-parity installed under each pre-v0.9.0 directory, relative to it.
+# Cleanup removes only these, then drops the directory if nothing else remains,
+# so a user file that shares the directory is preserved rather than deleted.
+tombstone_own_files() {
+  case "$1" in
+    .agents/mcp)
+      echo memory/run.sh memory/run.cmd memory/VERSION memory/RELEASE
+      echo memory/dist/memory-mcp-linux-amd64 memory/dist/memory-mcp-linux-arm64
+      echo memory/dist/memory-mcp-darwin-amd64 memory/dist/memory-mcp-darwin-arm64
+      echo memory/dist/memory-mcp-windows-amd64.exe ;;
+    .agents/bin)
+      echo agent-parity agent-parity.cmd agent-parity.ps1 ;;
+    .agents/scripts)
+      echo common.sh common.ps1 status.sh status.ps1 version.sh version.ps1
+      echo uninstall.sh uninstall.ps1 sync-claude.sh sync-claude.ps1
+      echo self-heal.sh self-heal.ps1 merge-memory.sh pre-push.sh ;;
+    .agents/claude)
+      echo settings.json ;;
+  esac
+}
+
 remove_tombstones() {
   for tombstone in $TOMBSTONES; do
-    [ -e "$TARGET/$tombstone" ] || continue
-    rm -rf "$TARGET/$tombstone"
-    echo "legacy: removed $tombstone"
+    dir="$TARGET/$tombstone"
+    [ -d "$dir" ] || continue
+    for rel in $(tombstone_own_files "$tombstone"); do
+      rm -f "$dir/$rel"
+    done
+    # Drop directories left empty, deepest first. rmdir refuses a non-empty
+    # directory, so any surviving user file keeps its tree intact.
+    find "$dir" -depth -type d -exec rmdir {} \; 2>/dev/null || true
+    if [ -d "$dir" ]; then
+      echo "legacy: kept $tombstone -- it has files agent-parity did not install"
+    else
+      echo "legacy: removed $tombstone"
+    fi
   done
 }
 

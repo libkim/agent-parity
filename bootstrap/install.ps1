@@ -216,12 +216,49 @@ function Installed-Version {
   return (Read-Text $versionFile).Trim()
 }
 
+# Files agent-parity installed under each pre-v0.9.0 directory, relative to it.
+# Cleanup removes only these, then drops the directory if nothing else remains,
+# so a user file that shares the directory is preserved rather than deleted.
+function Tombstone-OwnFiles([string]$Tombstone) {
+  switch ($Tombstone) {
+    ".agents/mcp" {
+      return @("memory/run.sh", "memory/run.cmd", "memory/VERSION", "memory/RELEASE",
+               "memory/dist/memory-mcp-linux-amd64", "memory/dist/memory-mcp-linux-arm64",
+               "memory/dist/memory-mcp-darwin-amd64", "memory/dist/memory-mcp-darwin-arm64",
+               "memory/dist/memory-mcp-windows-amd64.exe")
+    }
+    ".agents/bin"     { return @("agent-parity", "agent-parity.cmd", "agent-parity.ps1") }
+    ".agents/scripts" {
+      return @("common.sh", "common.ps1", "status.sh", "status.ps1", "version.sh", "version.ps1",
+               "uninstall.sh", "uninstall.ps1", "sync-claude.sh", "sync-claude.ps1",
+               "self-heal.sh", "self-heal.ps1", "merge-memory.sh", "pre-push.sh")
+    }
+    ".agents/claude"  { return @("settings.json") }
+  }
+  return @()
+}
+
 function Remove-Tombstones {
   foreach ($tombstone in $Tombstones) {
     $full = Path-InTarget $tombstone
-    if (Test-Path -LiteralPath $full) {
-      Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue
+    if (!(Test-Path -LiteralPath $full)) { continue }
+    foreach ($rel in (Tombstone-OwnFiles $tombstone)) {
+      Remove-Item -LiteralPath (Join-Path $full ($rel -replace '/', '\')) -Force -ErrorAction SilentlyContinue
+    }
+    # Drop directories left empty, deepest first. A directory with a surviving
+    # user file is kept.
+    Get-ChildItem -LiteralPath $full -Recurse -Directory -Force -ErrorAction SilentlyContinue |
+      Sort-Object { $_.FullName.Length } -Descending |
+      ForEach-Object {
+        if (!(Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue)) {
+          Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+        }
+      }
+    if (!(Get-ChildItem -LiteralPath $full -Force -ErrorAction SilentlyContinue)) {
+      Remove-Item -LiteralPath $full -Force -ErrorAction SilentlyContinue
       Write-Output "legacy: removed $tombstone"
+    } else {
+      Write-Output "legacy: kept $tombstone -- it has files agent-parity did not install"
     }
   }
 }

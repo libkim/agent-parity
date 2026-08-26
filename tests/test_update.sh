@@ -81,12 +81,25 @@ mkdir -p "$mig/.agents/mcp/memory" "$mig/.agents/memory"
 printf 'v9.8.6\n' > "$mig/.agents/mcp/memory/VERSION"
 printf 'file://%s/dist\n' "$repo" > "$mig/.agents/mcp/memory/RELEASE"
 printf 'old-memory-body\n' > "$mig/.agents/memory/42.md"
+# Pre-v0.9.0 tooling dirs: agent-parity's own files, plus a user file that
+# happens to share .agents/scripts. Tombstone cleanup must remove our files and
+# the emptied .agents/bin, but preserve .agents/scripts because of the user file.
+mkdir -p "$mig/.agents/bin" "$mig/.agents/scripts"
+printf 'old-launcher\n' > "$mig/.agents/bin/agent-parity"
+printf 'old-common\n' > "$mig/.agents/scripts/common.sh"
+printf 'my custom hook\n' > "$mig/.agents/scripts/write_doc_review_reminder.py"
 AGENT_PARITY_RAW="file://$repo" AGENT_PARITY_RELEASE="file://$repo/dist" \
   AGENT_PARITY_VERSION=v9.8.7 AGENT_PARITY_CACHE="$mig/cache" \
   sh "$repo/dist/update.sh" "$mig" > "$mig/out" 2>&1 || { cat "$mig/out" >&2; rm -rf "$mig"; exit 1; }
 [ -f "$mig/.agent-parity/memory/42.md" ] || { echo "store not migrated to new location" >&2; rm -rf "$mig"; exit 1; }
 [ "$(cat "$mig/.agent-parity/memory/42.md")" = old-memory-body ] || { echo "migrated memory content changed" >&2; rm -rf "$mig"; exit 1; }
 [ ! -e "$mig/.agents/memory" ] || { echo "old empty store dir not removed" >&2; rm -rf "$mig"; exit 1; }
+# Tombstone cleanup preserves the user file and its directory, removes only our
+# own files, and drops the directory that held only our files.
+[ -f "$mig/.agents/scripts/write_doc_review_reminder.py" ] || { echo "tombstone deleted a user file" >&2; rm -rf "$mig"; exit 1; }
+[ ! -e "$mig/.agents/scripts/common.sh" ] || { echo "tombstone left agent-parity's own file behind" >&2; rm -rf "$mig"; exit 1; }
+[ ! -e "$mig/.agents/bin" ] || { echo "emptied legacy .agents/bin not removed" >&2; rm -rf "$mig"; exit 1; }
+grep -qF 'kept .agents/scripts' "$mig/out" || { echo "update did not report keeping .agents/scripts" >&2; cat "$mig/out" >&2; rm -rf "$mig"; exit 1; }
 rm -rf "$mig"
 
-echo "update skips equal versions, applies newer versions, and migrates the store: OK"
+echo "update skips equal versions, applies newer versions, migrates the store, and preserves user files in tombstoned dirs: OK"
