@@ -534,6 +534,8 @@ var memoryPermissions = []string{
 	"mcp__memory__memory_recent",
 	"mcp__memory__memory_search",
 	"mcp__memory__memory_get",
+	"mcp__memory__memory_update",
+	"mcp__memory__memory_governance",
 }
 
 // mergeClaudeSettings merges agent-parity's keys into a Claude settings.json,

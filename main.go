@@ -95,6 +95,64 @@ func getHandler(ctx context.Context, req *mcp.CallToolRequest, in GetInput) (*mc
 	return nil, GetOutput{Entry: e}, nil
 }
 
+type UpdateInput struct {
+	ID     string `json:"id" jsonschema:"the memory id to update"`
+	Status string `json:"status" jsonschema:"new lifecycle status: 'active', 'deprecated' (retire it), or 'merged' (it was consolidated into another memory). A non-active governance memory stops being delivered to future sessions."`
+}
+type UpdateOutput struct {
+	Entry Entry `json:"entry"`
+}
+
+func updateHandler(ctx context.Context, req *mcp.CallToolRequest, in UpdateInput) (*mcp.CallToolResult, UpdateOutput, error) {
+	e, err := store.Update(in.ID, in.Status)
+	if err != nil {
+		return nil, UpdateOutput{}, err
+	}
+	return nil, UpdateOutput{Entry: e}, nil
+}
+
+type GovernanceInput struct {
+	Status string `json:"status,omitempty" jsonschema:"filter by lifecycle status: 'active', 'deprecated', or 'merged'; omit for all governance regardless of status"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"max results (default 50)"`
+}
+type GovernanceOutput struct {
+	Results []Entry `json:"results"`
+}
+
+func governanceHandler(ctx context.Context, req *mcp.CallToolRequest, in GovernanceInput) (*mcp.CallToolResult, GovernanceOutput, error) {
+	res, err := store.GovernanceByStatus(in.Status)
+	if err != nil {
+		return nil, GovernanceOutput{}, err
+	}
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if len(res) > limit {
+		res = res[:limit]
+	}
+	return nil, GovernanceOutput{Results: res}, nil
+}
+
+// withGovernance appends the active governance rules to the base instructions,
+// one per line prefixed with its memory id so an agent can retire a rule with
+// memory_update. An empty set leaves the instructions unchanged.
+func withGovernance(base string, gov []Entry) string {
+	if len(gov) == 0 {
+		return base
+	}
+	var b strings.Builder
+	b.WriteString(base)
+	b.WriteString("\n\nProject governance (standing rules for this project; follow them). Each line is prefixed with its memory id; to retire a rule that no longer holds or was merged into another, call memory_update with that id:")
+	for _, g := range gov {
+		b.WriteString("\n- [")
+		b.WriteString(g.ID)
+		b.WriteString("] ")
+		b.WriteString(g.Body)
+	}
+	return b.String()
+}
+
 func main() {
 	dir := flag.String("dir", "", "memory directory (overrides $MEMORY_DIR; default ./memory)")
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -124,6 +182,7 @@ func main() {
 		"At the start of a session, call memory_recent to load prior context before acting. " +
 		"When the user reveals an intent, decision, or preference worth keeping, and when a task reaches a checkpoint or finishes, call memory_add with the fact and its reason. " +
 		"Call memory_add with type 'governance' only for a durable project rule that must hold in every future session; those are delivered below automatically and are not returned by recent or search. Everything else is ordinary context. " +
+		"When a governance rule no longer holds or is folded into a broader one, call memory_update to set its status to 'deprecated' or 'merged' so it stops reaching future sessions rather than leaving a stale rule in force; call memory_governance to review or reactivate retired rules, since recent and search omit governance. " +
 		"When a past topic or decision becomes relevant, call memory_search before acting. " +
 		"Store durable context, not secrets, one-off chatter, or facts another source already enforces. " +
 		"Memories are saved as plaintext and committed to the repo, which may be shared or public, so never store credentials, tokens, keys, or other sensitive data."
@@ -131,15 +190,8 @@ func main() {
 	// Governance memories are the project's standing rules. Fold them into the
 	// Instructions so every session receives them at initialize, without an
 	// agent having to recall them.
-	if gov, gerr := store.Governance(); gerr == nil && len(gov) > 0 {
-		var b strings.Builder
-		b.WriteString(instructions)
-		b.WriteString("\n\nProject governance (standing rules for this project; follow them):")
-		for _, g := range gov {
-			b.WriteString("\n- ")
-			b.WriteString(g.Body)
-		}
-		instructions = b.String()
+	if gov, gerr := store.Governance(); gerr == nil {
+		instructions = withGovernance(instructions, gov)
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "cross-agent-memory", Version: version}, &mcp.ServerOptions{
@@ -161,6 +213,14 @@ func main() {
 		Name:        "memory_get",
 		Description: "Fetch a single memory by id.",
 	}, getHandler)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "memory_update",
+		Description: "Change a memory's lifecycle status: 'active', 'deprecated' (retire it), or 'merged' (it was consolidated into another memory). Use this to retire a governance rule that no longer holds or was folded into a broader one; a non-active governance memory is no longer delivered to future sessions. The file is kept for history.",
+	}, updateHandler)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "memory_governance",
+		Description: "List governance memories (the project's standing rules), optionally filtered by status: 'active', 'deprecated', or 'merged'. Unlike memory_search, this includes retired rules, so use it to find the id of a deprecated or merged rule to reactivate with memory_update, or to review what was retired. Active rules already arrive in the session instructions, so this is for lifecycle review, not routine recall.",
+	}, governanceHandler)
 
 	// A stdio server ending because the client disconnected (EOF) is normal,
 	// not a failure, so log and exit 0 rather than crashing.

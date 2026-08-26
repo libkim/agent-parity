@@ -23,6 +23,10 @@ type Entry struct {
 	// through the server Instructions) or "context" (ordinary working memory
 	// returned by recent/search). A missing field means context.
 	Type string `json:"type"`
+	// Status is "active", "deprecated" (retired), or "merged" (consolidated
+	// into another memory). Only active governance is folded into the server
+	// Instructions. A missing field means active.
+	Status string `json:"status"`
 }
 
 // frontmatter is both the write schema and the fields read back. Older memory
@@ -34,6 +38,7 @@ type frontmatter struct {
 	Created time.Time `yaml:"created"`
 	Tags    []string  `yaml:"tags"`
 	Type    string    `yaml:"type,omitempty"`
+	Status  string    `yaml:"status,omitempty"`
 }
 
 // memoryType canonicalizes the type: "governance" only when explicitly set,
@@ -43,6 +48,18 @@ func memoryType(t string) string {
 		return "governance"
 	}
 	return "context"
+}
+
+// memoryStatus canonicalizes the status: "deprecated" or "merged" only when
+// explicitly set, otherwise "active" (the default and the meaning of a missing
+// field).
+func memoryStatus(st string) string {
+	switch st {
+	case "deprecated", "merged":
+		return st
+	default:
+		return "active"
+	}
 }
 
 // Store is a directory of markdown files, one file per memory.
@@ -73,6 +90,7 @@ func (s *Store) Add(body string, tags []string, typ string) (Entry, error) {
 		Tags:    tags,
 		Created: now,
 		Type:    memoryType(typ),
+		Status:  "active",
 	}
 	if err := s.write(e); err != nil {
 		return Entry{}, err
@@ -84,6 +102,9 @@ func (s *Store) write(e Entry) error {
 	fm := frontmatter{Created: e.Created, Tags: e.Tags}
 	if e.Type == "governance" {
 		fm.Type = "governance" // context is the default, so it stays out of the file
+	}
+	if st := memoryStatus(e.Status); st != "active" {
+		fm.Status = st // active is the default, so it stays out of the file
 	}
 	y, err := yaml.Marshal(fm)
 	if err != nil {
@@ -161,6 +182,7 @@ func parseEntry(id string, raw []byte) (Entry, error) {
 		Tags:    fm.Tags,
 		Created: fm.Created,
 		Type:    memoryType(fm.Type),
+		Status:  memoryStatus(fm.Status),
 	}, nil
 }
 
@@ -207,6 +229,37 @@ func (s *Store) Recent(limit int) ([]Entry, error) {
 	return ctx, nil
 }
 
+// GovernanceByStatus returns governance memories filtered by status, newest
+// first. An empty status returns every governance memory regardless of status,
+// so retired rules stay discoverable for review or reactivation even though they
+// are excluded from recent, search, and the injected Instructions.
+func (s *Store) GovernanceByStatus(status string) ([]Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	switch status {
+	case "", "active", "deprecated", "merged":
+	default:
+		return nil, fmt.Errorf("invalid status %q (want active, deprecated, merged, or empty for all)", status)
+	}
+	all, err := s.all()
+	if err != nil {
+		return nil, err
+	}
+	var gov []Entry
+	for _, e := range all {
+		if e.Type != "governance" {
+			continue
+		}
+		if status != "" && memoryStatus(e.Status) != status {
+			continue
+		}
+		gov = append(gov, e)
+	}
+	sort.Slice(gov, func(i, j int) bool { return gov[i].Created.After(gov[j].Created) })
+	return gov, nil
+}
+
 // Governance returns the governance memories, oldest first, for the server to
 // fold into its Instructions at session start.
 func (s *Store) Governance() ([]Entry, error) {
@@ -219,7 +272,7 @@ func (s *Store) Governance() ([]Entry, error) {
 	}
 	var gov []Entry
 	for _, e := range all {
-		if e.Type == "governance" {
+		if e.Type == "governance" && memoryStatus(e.Status) == "active" {
 			gov = append(gov, e)
 		}
 	}
@@ -231,6 +284,30 @@ func (s *Store) Get(id string) (Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.read(id)
+}
+
+// Update sets the lifecycle status of an existing memory. status must be
+// "active", "deprecated", or "merged". A governance memory that is not active
+// is dropped from the server Instructions, so this is how a standing rule is
+// retired or folded into a broader one without deleting its file.
+func (s *Store) Update(id, status string) (Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	switch status {
+	case "active", "deprecated", "merged":
+	default:
+		return Entry{}, fmt.Errorf("invalid status %q (want active, deprecated, or merged)", status)
+	}
+	e, err := s.read(id)
+	if err != nil {
+		return Entry{}, err
+	}
+	e.Status = status
+	if err := s.write(e); err != nil {
+		return Entry{}, err
+	}
+	return e, nil
 }
 
 // Search returns memories matching the query, ranked by a static, deterministic

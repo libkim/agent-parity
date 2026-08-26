@@ -281,7 +281,13 @@ receives them automatically, and they are kept out of `memory_recent` and
 `memory_search` so they never crowd the working results. Keep governance small
 and curated, since it costs context in every session; a governance memory saved
 mid-session applies to the next session onward, and to the current one it is
-already in the conversation.
+already in the conversation. A governance rule that no longer holds, or that was
+folded into a broader one, is retired with `memory_update`: setting its status
+to `deprecated` or `merged` drops it from the startup instructions while keeping
+the file for history. `memory_governance` lists the rules by status, retired ones
+included, so a deprecated or merged rule can be reviewed or reactivated;
+`memory_recent` and `memory_search` never return governance. The injected rules
+are each prefixed with their memory id so an agent can retire one in place.
 
 A memory is normally created once under a unique id, so two machines rarely
 touch the same file. When they do (an explicit edit on both sides), a bundled

@@ -170,3 +170,120 @@ func TestGovernanceIsSeparatedFromContext(t *testing.T) {
 		t.Fatalf("context file should omit type:\n%s", ctxRaw)
 	}
 }
+
+func TestGovernanceStatusLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keep, _ := s.Add("always vendor the lockfile", []string{"rule"}, "governance")
+	drop, _ := s.Add("prefer tabs over spaces", []string{"rule"}, "governance")
+
+	// A fresh memory is active, and an active file omits the status field.
+	if keep.Status != "active" {
+		t.Fatalf("new memory status = %q, want active", keep.Status)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(dir, keep.ID+".md")); strings.Contains(string(raw), "status:") {
+		t.Fatalf("active file should omit status:\n%s", raw)
+	}
+
+	// Deprecating one drops it from Governance() but keeps it fetchable by id,
+	// and the file records the status.
+	if _, err := s.Update(drop.ID, "deprecated"); err != nil {
+		t.Fatal(err)
+	}
+	if gov, _ := s.Governance(); len(gov) != 1 || gov[0].ID != keep.ID {
+		t.Fatalf("Governance() after deprecate = %+v, want only %s", gov, keep.ID)
+	}
+	if got, err := s.Get(drop.ID); err != nil || got.Status != "deprecated" {
+		t.Fatalf("Get(deprecated) = %+v, %v", got, err)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(dir, drop.ID+".md")); !strings.Contains(string(raw), "status: deprecated") {
+		t.Fatalf("deprecated file missing status:\n%s", raw)
+	}
+
+	// "merged" is likewise excluded, and reactivating restores injection.
+	if _, err := s.Update(drop.ID, "merged"); err != nil {
+		t.Fatal(err)
+	}
+	if gov, _ := s.Governance(); len(gov) != 1 {
+		t.Fatalf("merged governance should stay out of Governance(), got %+v", gov)
+	}
+	if _, err := s.Update(drop.ID, "active"); err != nil {
+		t.Fatal(err)
+	}
+	if gov, _ := s.Governance(); len(gov) != 2 {
+		t.Fatalf("reactivated governance should return to Governance(), got %+v", gov)
+	}
+
+	// An unknown status is rejected.
+	if _, err := s.Update(keep.ID, "archived"); err == nil {
+		t.Fatal("Update accepted an invalid status")
+	}
+}
+
+func TestLegacyGovernanceWithoutStatusIsActive(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A file written before the status field existed carries no status and must
+	// still be delivered as an active governance rule.
+	legacy := "---\ncreated: 2020-01-01T00:00:00Z\ntags: []\ntype: governance\n---\nlegacy rule\n"
+	if err := os.WriteFile(filepath.Join(dir, "42.md"), []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if e, err := s.Get("42"); err != nil || e.Status != "active" {
+		t.Fatalf("legacy memory status = %+v, %v; want active", e, err)
+	}
+	if gov, _ := s.Governance(); len(gov) != 1 || gov[0].ID != "42" {
+		t.Fatalf("legacy governance should be active and injected, got %+v", gov)
+	}
+}
+
+func TestGovernanceByStatusFiltersAndIncludesRetired(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	act, _ := s.Add("live rule", nil, "governance")
+	dep, _ := s.Add("old rule", nil, "governance")
+	mer, _ := s.Add("absorbed rule", nil, "governance")
+	s.Add("just a note", nil, "context")
+	if _, err := s.Update(dep.ID, "deprecated"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Update(mer.ID, "merged"); err != nil {
+		t.Fatal(err)
+	}
+
+	ids := func(es []Entry) map[string]bool {
+		m := map[string]bool{}
+		for _, e := range es {
+			m[e.ID] = true
+		}
+		return m
+	}
+
+	// No filter returns every governance memory including retired ones, and no
+	// context memory.
+	all, _ := s.GovernanceByStatus("")
+	got := ids(all)
+	if len(all) != 3 || !got[act.ID] || !got[dep.ID] || !got[mer.ID] {
+		t.Fatalf("GovernanceByStatus(\"\") = %+v, want the 3 governance memories", all)
+	}
+
+	// Status filters narrow to one lifecycle.
+	if d, _ := s.GovernanceByStatus("deprecated"); len(d) != 1 || d[0].ID != dep.ID {
+		t.Fatalf("deprecated filter = %+v, want %s", d, dep.ID)
+	}
+	if a, _ := s.GovernanceByStatus("active"); len(a) != 1 || a[0].ID != act.ID {
+		t.Fatalf("active filter = %+v, want %s", a, act.ID)
+	}
+	if _, err := s.GovernanceByStatus("bogus"); err == nil {
+		t.Fatal("GovernanceByStatus accepted an invalid status")
+	}
+}
