@@ -99,7 +99,8 @@ The `memory` MCP lets multiple agents use one memory the same way. Items marked 
 
 Claude Code's pre-approval needs the exact project folder trusted. If only a
 parent directory is trusted, the trust dialog is skipped but the memory server
-still prompts for approval once ([claude-code#79612](https://github.com/anthropics/claude-code/issues/79612)).
+still prompts for approval once. This is a confirmed Claude Code bug
+([claude-code#79612](https://github.com/anthropics/claude-code/issues/79612)), pending an upstream fix.
 
 ### Commands
 

@@ -81,7 +81,7 @@ irm https://github.com/libkim/agent-parity/releases/latest/download/install.ps1 
 | Cursor Agent | 필요 | 불필요 |
 | Antigravity CLI | 불필요 | 필요 |
 
-Claude Code의 사전 승인은 정확한 프로젝트 폴더가 신뢰돼 있어야 적용됩니다. 상위 폴더만 신뢰된 경우 신뢰 다이얼로그는 생략되지만 memory 서버 승인 창이 한 번 뜹니다([claude-code#79612](https://github.com/anthropics/claude-code/issues/79612)).
+Claude Code의 사전 승인은 정확한 프로젝트 폴더가 신뢰돼 있어야 적용됩니다. 상위 폴더만 신뢰된 경우 신뢰 다이얼로그는 생략되지만 memory 서버 승인 창이 한 번 뜹니다. 이는 Claude Code의 버그로 확인됐으며([claude-code#79612](https://github.com/anthropics/claude-code/issues/79612)), 업스트림 수정 대기 중입니다.
 
 ### 관리 명령어
 
