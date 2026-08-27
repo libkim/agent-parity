@@ -18,7 +18,7 @@ rather than in the repo, so it never follows the project to another machine or a
 teammate. Skills and instructions can be committed and travel, but each agent
 keeps its own, so they drift as you switch agents.
 
-agent-parity commits both to the repo as **environment as code**. The memory
+agent-parity commits both to the repo as **environment as code**, versioned alongside your source. The memory
 store lives in the repo, so cloning it to a new machine or handing it to a
 teammate carries the context along, and whoever receives it uses it from the
 next session with no install command to run; a bundled merge driver even
@@ -32,7 +32,8 @@ so they stay consistent instead of diverging per agent.
   The shared environment is plain files in your repo, and the helpers ship as
   small native binaries.
 - **Non-invasive**: changes project settings only, never global agent settings,
-  and merges just its own entries so your other settings stay intact.
+  and merges just its own entries so your other settings stay intact. The files
+  and settings agent-parity owns and regenerates on `update` are its managed files.
 - **Zero-install**: commit the wiring once, and a fresh clone needs no install
   or update command. The setup activates on the next agent session.
 
@@ -201,8 +202,9 @@ ends up stored.
 ## How it works
 
 The portable wiring, release metadata, memory, and skills are committed to the
-repo; MCP binaries are not. On first use, `run.sh` / `run.cmd` downloads only
-the current platform's binary from the project's pinned release, verifies it
+repo; MCP binaries are not. On first use, the `run.sh` / `run.cmd` launcher that
+runs the memory server downloads only the current platform's binary from the
+project's pinned release, verifies it
 against `checksums.txt`, and stores it in a per-user cache shared by projects.
 Install/update also places the current platform's small `agent-parity-config`
 editor in that shared cache. On a fresh pull with an empty cache, self-heal
@@ -256,8 +258,10 @@ prevent the others from converging.
 
 ### Cross-OS self-heal
 
-The committed MCP configs point to either `run.sh` or `run.cmd`. The managed
-hooks inspect all four configs and change only an agent-parity-owned
+Self-heal is a managed hook that runs at the start of a session and repairs the
+config to match the current OS on its own. The committed MCP configs point to
+either `run.sh` or `run.cmd`. The managed hooks inspect all four configs and
+change only an agent-parity-owned
 `memory` command to the launcher for the current OS. Claude and Codex run this
 at `SessionStart`, Cursor at `sessionStart`, and Antigravity at
 `PreInvocation`. A user-supplied `memory` server is never overwritten. When a
@@ -270,9 +274,19 @@ before they run.
 
 ### Memory
 
-Each memory is a markdown file with `created` and `tags` frontmatter.
-`memory_recent` returns the newest by `created`; `memory_search` matches tags
-and body keywords and ranks a tag match above a body-text match. Ranking is
+The memory server agent-parity installs stores memories as files and exposes the
+tools an agent calls.
+
+| Tool | What it does |
+| --- | --- |
+| `memory_add` | Save a memory (optionally `type: governance`) |
+| `memory_recent` | Return the newest context memories, latest first |
+| `memory_search` | Search tags and body keywords, ranking a tag match above a body-text match |
+| `memory_get` | Fetch one memory by id |
+| `memory_update` | Change a memory's status to active, deprecated, or merged |
+| `memory_governance` | List governance by status, retired ones included |
+
+Each memory is a markdown file with `created` and `tags` frontmatter. Ranking is
 static, so reading never rewrites a file.
 
 agent-parity turns off the agent's built-in auto-memory, so an agent's memories

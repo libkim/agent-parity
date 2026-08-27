@@ -13,9 +13,9 @@
   </picture>
 </p>
 
-코딩 에이전트의 메모리는 보통 저장소가 아니라 네 머신의 홈 디렉터리에 있어서, 다른 머신이나 팀원에게 따라가지 않습니다. 스킬과 지침은 커밋하면 따라오지만 에이전트마다 자기 것을 따로 두어, 에이전트를 갈아탈 때 제각각이 됩니다.
+코딩 에이전트의 메모리는 보통 저장소가 아니라 사용자 머신의 홈 디렉터리에 있어서, 다른 머신이나 팀원에게 따라가지 않습니다. 스킬과 지침은 커밋하면 따라오지만 에이전트마다 자기 것을 따로 두어, 에이전트를 갈아탈 때 제각각이 됩니다.
 
-agent-parity는 이 둘을 저장소에 커밋하는 **코드형 환경**으로 만듭니다. 메모리가 저장소에 담기니 새 머신에 클론하거나 팀원에게 넘기면 맥락이 따라오고, 받는 쪽은 설치 명령 없이 다음 세션부터 바로 씁니다. 함께 설치되는 merge 드라이버가 두 머신에서 동시에 편집한 내용도 합쳐줍니다. 스킬과 지침은 Claude Code·Codex·Cursor·Antigravity가 모두 읽는 하나의 공유 정의가 되어, 모든 에이전트에서 일관되게 유지됩니다.
+agent-parity는 이 둘을 저장소에 커밋해 코드처럼 버전 관리하는 **코드형 환경**으로 만듭니다. 메모리가 저장소에 담기니 새 머신에 클론하거나 팀원에게 넘기면 맥락이 따라오고, 받는 쪽은 설치 명령 없이 다음 세션부터 바로 씁니다. 함께 설치되는 merge 드라이버가 두 머신에서 동시에 편집한 내용도 합쳐줍니다. 스킬과 지침은 Claude Code·Codex·Cursor·Antigravity가 모두 읽는 하나의 공유 정의가 되어, 모든 에이전트에서 일관되게 유지됩니다.
 
 ## 특징
 
@@ -23,7 +23,8 @@ agent-parity는 이 둘을 저장소에 커밋하는 **코드형 환경**으로 
   저장소 안의 평문 파일이고 보조 실행 파일은 작은 네이티브 바이너리로
   제공됩니다.
 - **비침습**: 프로젝트 설정만 변경하고 에이전트 전역 설정은 건드리지 않으며,
-  자기 항목만 병합하므로 사용자의 다른 설정은 그대로 둡니다.
+  자기 항목만 병합하므로 사용자의 다른 설정은 그대로 둡니다. agent-parity가
+  소유·유지하고 update가 다시 만드는 이런 파일과 설정을 관리 대상이라고 부릅니다.
 - **무설치**: 관리 대상 파일을 한 번 커밋해두면 새로 받은 저장소는 install이나
   update 명령이 필요 없습니다. 다음 에이전트 세션에서 설정이 활성화됩니다.
 
@@ -159,7 +160,7 @@ agent-parity는 `.agent-parity/scripts/pre-push.sh`를 실행하는 `pre-push` �
 
 ## 동작 방식
 
-이식 가능한 관리 대상 파일, 릴리스 메타데이터, 메모리와 스킬은 저장소에 커밋하지만 MCP 바이너리는 커밋하지 않습니다. `run.sh` / `run.cmd`는 처음 사용할 때 프로젝트에 고정된 릴리스에서 현재 플랫폼 바이너리 하나만 내려받고 `checksums.txt`로 검증한 뒤 프로젝트들이 공유하는 사용자 캐시에 저장합니다. install/update는 같은 캐시에 현재 플랫폼용 소형 `agent-parity-config` 편집기도 설치합니다. 빈 캐시에서 처음 실행되는 self-heal도 동일하게 고정된 편집기를 자동으로 내려받아 검증합니다. 설정을 다루는 관리 명령은 캐시된 편집기로 JSON/TOML을 파싱하고 수정하므로 MCP 서버를 시작하거나 내려받지 않습니다. `status`와 `version`은 최신 릴리스 필드를 확인하는 제한된 네트워크 요청만 수행합니다. 기본 캐시는 Unix에서 `$XDG_CACHE_HOME/agent-parity`(없으면 `~/.cache/agent-parity`), Windows에서 `%LOCALAPPDATA%\agent-parity\cache`이며 `AGENT_PARITY_CACHE`로 바꿀 수 있습니다. `uninstall`은 공유 캐시를 지우지 않습니다. Claude 산출물은 추적되는 원본에서 생성합니다. `.claude/skills/`는 git에서 제외하지만, 생성된 `.claude/settings.json`은 커밋하여 새로 받은 저장소에도 다시 생성하는 데 필요한 훅이 있도록 합니다. `.gitignore`가 추적할 관리 대상 파일을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
+이식 가능한 관리 대상 파일, 릴리스 메타데이터, 메모리와 스킬은 저장소에 커밋하지만 MCP 바이너리는 커밋하지 않습니다. 메모리 서버를 실행하는 런처인 `run.sh` / `run.cmd`는 처음 사용할 때 프로젝트에 고정된 릴리스에서 현재 플랫폼 바이너리 하나만 내려받고 `checksums.txt`로 검증한 뒤 프로젝트들이 공유하는 사용자 캐시에 저장합니다. install/update는 같은 캐시에 현재 플랫폼용 소형 `agent-parity-config` 편집기도 설치합니다. 빈 캐시에서 처음 실행되는 self-heal도 동일하게 고정된 편집기를 자동으로 내려받아 검증합니다. 설정을 다루는 관리 명령은 캐시된 편집기로 JSON/TOML을 파싱하고 수정하므로 MCP 서버를 시작하거나 내려받지 않습니다. `status`와 `version`은 최신 릴리스 필드를 확인하는 제한된 네트워크 요청만 수행합니다. 기본 캐시는 Unix에서 `$XDG_CACHE_HOME/agent-parity`(없으면 `~/.cache/agent-parity`), Windows에서 `%LOCALAPPDATA%\agent-parity\cache`이며 `AGENT_PARITY_CACHE`로 바꿀 수 있습니다. `uninstall`은 공유 캐시를 지우지 않습니다. Claude 산출물은 추적되는 원본에서 생성합니다. `.claude/skills/`는 git에서 제외하지만, 생성된 `.claude/settings.json`은 커밋하여 새로 받은 저장소에도 다시 생성하는 데 필요한 훅이 있도록 합니다. `.gitignore`가 추적할 관리 대상 파일을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
 
 agent-parity는 사용자 콘텐츠와 자체 관리 대상 파일을 다르게 다룹니다. 에이전트 설정과 Claude 설정에는 자기 항목만 병합하므로, 그 안의 다른 설정과 사용자가 다른 서버로 바꿔 둔 `memory` 항목은 보존됩니다. `AGENTS.md`·`.gitignore`의 마커 블록과 생성 shim(런처, 동기화 스크립트, 관리 명령, `agent-parity` 스킬)은 `update`가 최신 상태로 다시 만드니 그 사본은 직접 고치지 마세요. `uninstall`은 자신이 넣은 것을 제거합니다. 메모리 저장소와 `.agents/skills/`의 사용자 스킬은 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 에이전트별 폴더(`.claude`·`.codex`·`.cursor`의 `skills/`)에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 합니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
 
@@ -177,11 +178,22 @@ agent-parity는 사용자 콘텐츠와 자체 관리 대상 파일을 다르게 
 
 ### 크로스 OS self-heal
 
-커밋된 MCP 설정은 `run.sh` 또는 `run.cmd` 중 하나를 가리킵니다. 관리 훅은 네 설정을 검사하고, agent-parity가 소유한 `memory` 명령만 현재 OS용 런처로 바꿉니다. Claude와 Codex는 `SessionStart`, Cursor는 `sessionStart`, Antigravity는 `PreInvocation`에서 실행합니다. 사용자가 직접 등록한 다른 `memory` 서버는 덮어쓰지 않습니다. 설정이 바뀌면 MCP 도구가 교정 전에 이미 로드됐을 수 있으므로 현재 에이전트 세션을 재시작하라고 안내하며, 변경이 없으면 아무것도 출력하지 않습니다. 빈 캐시에서는 고정된 설정 편집기만 내려받아 검증하며 MCP 서버 바이너리는 다운로드하거나 실행하지 않습니다. Codex 프로젝트 훅은 실행 전에 `/hooks` 또는 Hooks UI에서 검토하고 신뢰해야 합니다.
+self-heal은 세션이 시작될 때 자동 실행되어 설정을 현재 OS에 맞게 스스로 교정하는 관리 훅입니다. 커밋된 MCP 설정은 `run.sh` 또는 `run.cmd` 중 하나를 가리킵니다. 관리 훅은 네 개 설정을 검사하고, agent-parity가 소유한 `memory` 명령만 현재 OS용 런처로 바꿉니다. Claude와 Codex는 `SessionStart`, Cursor는 `sessionStart`, Antigravity는 `PreInvocation`에서 실행합니다. 사용자가 직접 등록한 다른 `memory` 서버는 덮어쓰지 않습니다. 설정이 바뀌면 MCP 도구가 교정 전에 이미 로드됐을 수 있으므로 현재 에이전트 세션을 재시작하라고 안내하며, 변경이 없으면 아무것도 출력하지 않습니다. 빈 캐시에서는 고정된 설정 편집기만 내려받아 검증하며 MCP 서버 바이너리는 다운로드하거나 실행하지 않습니다. Codex 프로젝트 훅은 실행 전에 `/hooks` 또는 Hooks UI에서 검토하고 신뢰해야 합니다.
 
 ### 메모리
 
-각 메모리는 `created`, `tags` 프론트매터를 가진 마크다운 파일입니다. `memory_recent`는 `created` 최신순으로 돌려주고, `memory_search`는 태그와 본문 키워드를 매칭해 태그 일치를 본문 일치보다 위로 둡니다. 랭킹이 정적이라 읽기가 파일을 재기록하지 않습니다.
+agent-parity가 함께 설치하는 memory 서버는 메모리를 파일로 저장하고, 에이전트가 호출하는 다음 도구를 노출합니다.
+
+| 도구 | 하는 일 |
+| --- | --- |
+| `memory_add` | 메모리 저장(선택적으로 `type: governance`) |
+| `memory_recent` | 최근 context 메모리를 최신순으로 반환 |
+| `memory_search` | 태그·본문 키워드로 검색하며 태그 일치를 본문 일치보다 위로 |
+| `memory_get` | id로 메모리 하나 조회 |
+| `memory_update` | 메모리 status를 active·deprecated·merged로 변경 |
+| `memory_governance` | governance를 status별로 나열(폐기·통합 포함) |
+
+각 메모리는 `created`, `tags` 프론트매터를 가진 마크다운 파일입니다. 랭킹이 정적이라 읽기가 파일을 재기록하지 않습니다.
 
 agent-parity는 에이전트의 내장 auto-memory를 꺼서, 메모리가 에이전트 자체의 머신 로컬 저장소가 아니라 이 공유 저장소 한 곳에 모입니다.
 
