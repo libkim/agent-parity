@@ -160,18 +160,18 @@ agent-parity는 `.agent-parity/scripts/pre-push.sh`를 실행하는 `pre-push` �
 
 ## 동작 방식
 
-이식 가능한 관리 대상 파일, 릴리스 메타데이터, 메모리와 스킬은 저장소에 커밋하지만 MCP 바이너리는 커밋하지 않습니다. 메모리 서버를 실행하는 런처인 `run.sh` / `run.cmd`는 처음 사용할 때 프로젝트에 고정된 릴리스에서 현재 플랫폼 바이너리 하나만 내려받고 `checksums.txt`로 검증한 뒤 프로젝트들이 공유하는 사용자 캐시에 저장합니다. install/update는 같은 캐시에 현재 플랫폼용 소형 `agent-parity-config` 편집기도 설치합니다. 빈 캐시에서 처음 실행되는 self-heal도 동일하게 고정된 편집기를 자동으로 내려받아 검증합니다. 설정을 다루는 관리 명령은 캐시된 편집기로 JSON/TOML을 파싱하고 수정하므로 MCP 서버를 시작하거나 내려받지 않습니다. `status`와 `version`은 최신 릴리스 필드를 확인하는 제한된 네트워크 요청만 수행합니다. 기본 캐시는 Unix에서 `$XDG_CACHE_HOME/agent-parity`(없으면 `~/.cache/agent-parity`), Windows에서 `%LOCALAPPDATA%\agent-parity\cache`이며 `AGENT_PARITY_CACHE`로 바꿀 수 있습니다. `uninstall`은 공유 캐시를 지우지 않습니다. Claude 산출물은 추적되는 원본에서 생성합니다. `.claude/skills/`는 git에서 제외하지만, 생성된 `.claude/settings.json`은 커밋하여 새로 받은 저장소에도 다시 생성하는 데 필요한 훅이 있도록 합니다. `.gitignore`가 추적할 관리 대상 파일을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
+이식 가능한 관리 대상 파일, 릴리스 메타데이터, 메모리와 스킬은 저장소에 커밋되지만 MCP 바이너리는 커밋되지 않습니다. 메모리 서버를 실행하는 런처인 `run.sh` / `run.cmd`는 처음 사용할 때 프로젝트에 고정된 릴리스에서 현재 플랫폼 바이너리 하나만 내려받고 `checksums.txt`로 검증한 뒤 프로젝트들이 공유하는 사용자 캐시에 저장합니다. install/update는 같은 캐시에 현재 플랫폼용 소형 `agent-parity-config` 편집기도 설치합니다. 빈 캐시에서 처음 실행되는 self-heal도 동일하게 고정된 편집기를 자동으로 내려받아 검증합니다. 설정을 다루는 관리 명령은 캐시된 편집기로 JSON/TOML을 파싱하고 수정하므로 MCP 서버를 시작하거나 내려받지 않습니다. `status`와 `version`은 최신 릴리스 필드를 확인하는 제한된 네트워크 요청만 수행합니다. 기본 캐시는 Unix에서 `$XDG_CACHE_HOME/agent-parity`(없으면 `~/.cache/agent-parity`), Windows에서 `%LOCALAPPDATA%\agent-parity\cache`이며 `AGENT_PARITY_CACHE`로 바꿀 수 있습니다. `uninstall`은 공유 캐시를 지우지 않습니다. Claude 산출물은 추적되는 원본에서 생성됩니다. `.claude/skills/`는 git에서 제외되지만, 생성된 `.claude/settings.json`은 커밋되어 새로 받은 저장소에도 다시 생성하는 데 필요한 훅이 담깁니다. `.gitignore`가 추적할 관리 대상 파일을 가리는 프로젝트면 `install`이 마커 블록으로 추적 규칙을 맞추고 `uninstall`이 되돌립니다. git은 여러 머신·팀과 공유할 때만 필요한 선택입니다.
 
-agent-parity는 사용자 콘텐츠와 자체 관리 대상 파일을 다르게 다룹니다. 에이전트 설정과 Claude 설정에는 자기 항목만 병합하므로, 그 안의 다른 설정과 사용자가 다른 서버로 바꿔 둔 `memory` 항목은 보존됩니다. `AGENTS.md`·`.gitignore`의 마커 블록과 생성 shim(런처, 동기화 스크립트, 관리 명령, `agent-parity` 스킬)은 `update`가 최신 상태로 다시 만드니 그 사본은 직접 고치지 마세요. `uninstall`은 자신이 넣은 것을 제거합니다. 메모리 저장소와 `.agents/skills/`의 사용자 스킬은 수정도 삭제도 하지 않습니다(`--purge`를 줘야 저장소를 지웁니다). 기존에 에이전트별 폴더(`.claude`·`.codex`·`.cursor`의 `skills/`)에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨 모든 에이전트가 함께 쓰게 합니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
+agent-parity는 사용자 콘텐츠와 자체 관리 대상 파일을 다르게 다룹니다. 에이전트 설정과 Claude 설정에는 자기 항목만 병합하므로, 그 안의 다른 설정과 사용자가 다른 서버로 바꿔 둔 `memory` 항목은 보존됩니다. `AGENTS.md`·`.gitignore`의 마커 블록과 생성 shim(런처, 동기화 스크립트, 관리 명령, `agent-parity` 스킬)은 `update`가 최신 상태로 다시 만드니 그 사본은 직접 고치지 마세요. `uninstall`은 자신이 넣은 것을 제거합니다. 메모리 저장소와 `.agents/skills/`의 사용자 스킬은 수정되지도 삭제되지도 않습니다. `--purge`를 줘야 저장소를 지웁니다. 기존에 에이전트별 폴더 `.claude`·`.codex`·`.cursor`의 `skills/`에 있던 스킬은 설치할 때 `.agents/skills/`로 옮겨져 모든 에이전트가 함께 씁니다. `uninstall` 후에도 `.claude/skills` 사본은 남겨, 공유 폴더를 못 읽는 Claude가 동기화 없이 스킬을 유지합니다.
 
 ### 설정 병합 정책
 
 설치와 업데이트는 모든 에이전트 설정에 같은 소유권 규칙을 적용합니다.
 
-- agent-parity 전용 네임스페이스는 하위를 개별 검증하지 않고 정규 형태 전체로 교체합니다.
-- 명령이 현재 또는 알려진 과거 agent-parity 명령과 정확히 일치하는 객체는 소유한 것으로 보고 정규 형태 전체로 교체합니다.
-- 공유 배열은 배열 자체의 타입까지만 검사하고 관계없는 원소는 불투명 값으로 보존합니다. 정확히 식별되는 관리 항목만 교체·제거하며 없으면 추가합니다.
-- 같은 이름이어도 소유권을 증명할 수 없는 객체는 보존하고, 경고에 파일 경로를 표시해 사용자가 직접 수정하도록 안내합니다.
+- agent-parity 전용 네임스페이스는 하위를 개별 검증하지 않고 정규 형태 전체로 교체됩니다.
+- 명령이 현재 또는 알려진 과거 agent-parity 명령과 정확히 일치하는 객체는 소유한 것으로 간주되어 정규 형태 전체로 교체됩니다.
+- 공유 배열에서는 배열 자체의 타입만 검사하고 관계없는 원소는 불투명 값으로 보존합니다. 정확히 식별되는 관리 항목만 교체·제거하며 없으면 추가합니다.
+- 같은 이름이어도 소유권을 증명할 수 없는 객체는 보존되고, 경고에 파일 경로를 표시해 사용자가 직접 수정하도록 안내합니다.
 - uninstall도 같은 식별 규칙을 역으로 적용해 관리 네임스페이스·객체·필드·배열 항목만 제거합니다.
 
 설정 경고가 발생해도 다른 파일 처리는 계속하며, 마지막에 경고 개수를 출력합니다. 한 에이전트의 손상되거나 충돌하는 설정 때문에 나머지 에이전트의 수렴이 막히지 않습니다.
@@ -186,12 +186,12 @@ agent-parity가 함께 설치하는 memory 서버는 메모리를 파일로 저�
 
 | 도구 | 하는 일 |
 | --- | --- |
-| `memory_add` | 메모리 저장(선택적으로 `type: governance`) |
+| `memory_add` | 메모리를 저장 |
 | `memory_recent` | 최근 context 메모리를 최신순으로 반환 |
 | `memory_search` | 태그·본문 키워드로 검색하며 태그 일치를 본문 일치보다 위로 |
 | `memory_get` | id로 메모리 하나 조회 |
 | `memory_update` | 메모리 status를 active·deprecated·merged로 변경 |
-| `memory_governance` | governance를 status별로 나열(폐기·통합 포함) |
+| `memory_governance` | 폐기·통합된 것까지 governance를 status별로 나열 |
 
 각 메모리는 `created`, `tags` 프론트매터를 가진 마크다운 파일입니다. 랭킹이 정적이라 읽기가 파일을 재기록하지 않습니다.
 
@@ -199,7 +199,7 @@ agent-parity는 에이전트의 내장 auto-memory를 꺼서, 메모리가 에�
 
 메모리는 두 가지 타입 중 하나입니다. **context**(기본값)는 일반 작업 메모리로 `memory_recent`·`memory_search`가 돌려줍니다. **governance**(`memory_add`에 `type: governance`)는 프로젝트 상시 규칙으로, 서버가 모든 governance 메모리를 시작 시 instructions에 실어 매 세션이 자동으로 받습니다. 대신 `memory_recent`·`memory_search`에서는 제외해 작업 결과를 밀어내지 않습니다. governance는 매 세션 컨텍스트 비용이 드니 소수로 큐레이트합니다. 세션 도중 저장한 governance는 다음 세션부터 적용되며, 그 세션에는 이미 대화 맥락에 있습니다. 더 이상 유효하지 않거나 더 넓은 규칙으로 합쳐진 governance는 `memory_update`로 물러나게 합니다. status를 `deprecated`나 `merged`로 바꾸면 시작 instructions에서 빠지고, 파일은 이력용으로 남습니다. `memory_governance`는 폐기·통합된 것까지 status별로 나열하므로 물러난 규칙을 검토하거나 되돌릴 수 있습니다. `memory_recent`·`memory_search`는 governance를 반환하지 않습니다. 주입되는 규칙은 각 줄에 메모리 id가 붙어 있어 에이전트가 그 자리에서 은퇴시킬 수 있습니다.
 
-메모리는 보통 고유 ID로 한 번 생성되므로 두 머신이 같은 파일을 건드릴 일이 드뭅니다. 그런 경우(양쪽에서 명시적 편집)에는 함께 설치되는 git 머지 드라이버가 태그를 union하고, 한쪽만 본문을 바꿨으면 그 본문을 취합니다. 양쪽이 본문을 다르게 바꾸면 원래대로 충돌합니다.
+메모리는 보통 고유 ID로 한 번 생성되므로 두 머신이 같은 파일을 건드릴 일이 드뭅니다. 양쪽에서 같은 파일을 명시적으로 편집한 경우, 함께 설치되는 git 머지 드라이버가 태그를 union하고, 한쪽만 본문을 바꿨으면 그 본문을 취합니다. 양쪽이 본문을 다르게 바꾸면 원래대로 충돌합니다.
 
 이 공유는 파일이 커밋돼야 작동하므로, 함께 설치되는 pre-push 훅이 관리 대상 파일이 미커밋인 상태의 push를 막습니다([git pre-push 훅](#git-pre-push-훅) 참고).
 

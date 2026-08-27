@@ -279,7 +279,7 @@ tools an agent calls.
 
 | Tool | What it does |
 | --- | --- |
-| `memory_add` | Save a memory (optionally `type: governance`) |
+| `memory_add` | Save a memory |
 | `memory_recent` | Return the newest context memories, latest first |
 | `memory_search` | Search tags and body keywords, ranking a tag match above a body-text match |
 | `memory_get` | Fetch one memory by id |
