@@ -18,7 +18,7 @@ rather than in the repo, so it never follows the project to another machine or a
 teammate. Skills and instructions can be committed and travel, but each agent
 keeps its own, so they drift as you switch agents.
 
-agent-parity commits both to the repo as **environment as code**, versioned alongside your source. The memory
+agent-parity turns both into plain files in your repo. Once committed, they become **environment as code**, versioned alongside your source. The memory
 store lives in the repo, so cloning it to a new machine or handing it to a
 teammate carries the context along, and whoever receives it uses it from the
 next session with no install command to run; a bundled merge driver even
