@@ -287,3 +287,38 @@ func TestGovernanceByStatusFiltersAndIncludesRetired(t *testing.T) {
 		t.Fatal("GovernanceByStatus accepted an invalid status")
 	}
 }
+
+func TestAddNormalizesCRLFBodyToLF(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A body quoted from a Windows source arrives with CRLF through the tool
+	// call; Add is the one writer whose body is not already parseEntry output.
+	entry, err := s.Add("first line\r\nsecond line\r\n\r\nfourth line", []string{"crlf"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(dir, entry.ID+".md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "\r") {
+		t.Fatalf("file kept CR bytes: %q", string(raw))
+	}
+	if !strings.Contains(string(raw), "first line\nsecond line\n\nfourth line\n") {
+		t.Fatalf("body was not written with LF: %q", string(raw))
+	}
+
+	// The round trip still yields the same body parseEntry would have produced.
+	got, err := s.Get(entry.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Body != "first line\nsecond line\n\nfourth line" {
+		t.Fatalf("body = %q", got.Body)
+	}
+}

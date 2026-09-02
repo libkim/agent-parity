@@ -110,7 +110,10 @@ func (s *Store) write(e Entry) error {
 	if err != nil {
 		return err
 	}
-	content := "---\n" + string(y) + "---\n" + e.Body + "\n"
+	// Mirror parseEntry's newline canonicalization on the way out: a body handed
+	// to Add comes straight from the tool call and may carry CRLF from a Windows
+	// source, and the frame around it is already LF on every OS.
+	content := "---\n" + string(y) + "---\n" + strings.ReplaceAll(e.Body, "\r\n", "\n") + "\n"
 	return atomicWrite(s.path(e.ID), []byte(content), 0o644)
 }
 
