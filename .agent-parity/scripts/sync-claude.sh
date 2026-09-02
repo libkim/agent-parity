@@ -4,12 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SKILLS_SOURCE="$ROOT_DIR/.agents/skills"
 SKILLS_TARGET="$ROOT_DIR/.claude/skills"
-SETTINGS_SOURCE="$ROOT_DIR/.agents/claude/settings.json"
+SETTINGS_SOURCE="$ROOT_DIR/.agent-parity/claude/settings.json"
 SETTINGS_TARGET="$ROOT_DIR/.claude/settings.json"
 
 usage() {
   cat <<'USAGE'
-Usage: .agents/scripts/sync-claude.sh <check|sync|clean>
+Usage: .agent-parity/scripts/sync-claude.sh <check|sync|clean>
 
 Materialize Claude Code artifacts from the synced .agents source.
   check  Report whether .claude matches .agents (skills + settings).
@@ -42,7 +42,7 @@ check() {
 
   # settings
   if [ ! -f "$SETTINGS_SOURCE" ]; then
-    echo "settings: no source (.agents/claude/settings.json) — skipped"
+    echo "settings: no source (.agent-parity/claude/settings.json) — skipped"
   elif [ ! -f "$SETTINGS_TARGET" ]; then
     echo "settings: missing .claude/settings.json"; status=1
   elif diff -q "$SETTINGS_SOURCE" "$SETTINGS_TARGET" >/dev/null; then
@@ -62,7 +62,7 @@ sync() {
   echo "synced:   .claude/skills recreated from .agents/skills"
   if [ -f "$SETTINGS_SOURCE" ]; then
     cp "$SETTINGS_SOURCE" "$SETTINGS_TARGET"
-    echo "synced:   .claude/settings.json recreated from .agents/claude/settings.json"
+    echo "synced:   .claude/settings.json recreated from .agent-parity/claude/settings.json"
   else
     echo "settings: no source — skipped"
   fi

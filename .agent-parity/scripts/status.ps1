@@ -51,8 +51,8 @@ if (Test-GitRepo) {
   }
   if (Test-PrePushHookRegistered) {
     Write-Output "  pre-push guard: registered (.git/hooks/pre-push)"
-  } elseif (Test-CustomHooksPath) {
-    Write-Output "  pre-push guard: core.hooksPath is set -- wire .agents/scripts/pre-push.sh into your hook manager"
+  } elseif (Test-Path -LiteralPath (Get-PrePushHookPath)) {
+    Write-Output "  pre-push guard: a pre-push hook is in place -- call .agent-parity/scripts/pre-push.sh from it"
   } else {
     Write-Output "  pre-push guard: missing (a session-start hook registers it)"
   }

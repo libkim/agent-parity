@@ -8,7 +8,7 @@
       {
         "hooks": [
           {
-            "command": ".agents/bin/agent-parity sync-claude",
+            "command": ".agent-parity/bin/agent-parity sync-claude",
             "type": "command"
           }
         ]
@@ -16,7 +16,7 @@
       {
         "hooks": [
           {
-            "command": ".agents/bin/agent-parity self-heal",
+            "command": ".agent-parity/bin/agent-parity self-heal claude",
             "timeout": 30,
             "type": "command"
           }
@@ -29,7 +29,9 @@
       "mcp__memory__memory_add",
       "mcp__memory__memory_recent",
       "mcp__memory__memory_search",
-      "mcp__memory__memory_get"
+      "mcp__memory__memory_get",
+      "mcp__memory__memory_update",
+      "mcp__memory__memory_governance"
     ]
   }
 }

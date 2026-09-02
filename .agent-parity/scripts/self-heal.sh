@@ -1,10 +1,15 @@
 #!/usr/bin/env sh
 set -eu
 
-[ "$#" -eq 0 ] || { echo "usage: self-heal.sh" >&2; exit 2; }
+[ "$#" -le 1 ] || { echo "usage: self-heal.sh [claude|cursor|codex|antigravity]" >&2; exit 2; }
+agent=${1:-}
+case "$agent" in
+  ""|claude|cursor|codex|antigravity) ;;
+  *) echo "self-heal: unknown agent '$agent'" >&2; exit 2 ;;
+esac
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 target=$(CDPATH= cd -- "$here/../.." && pwd)
-desired=".agents/mcp/memory/run.sh"
+desired=".agent-parity/mcp/memory/run.sh"
 changed=0
 failed=0
 failure_details=""
@@ -30,10 +35,21 @@ ensure_config() {
 # script exists to prevent.
 if ensure_local_config_editor 2>/dev/null; then
   editor=$CONFIG_EDITOR
-  ensure_config ".mcp.json"
-  ensure_config ".cursor/mcp.json"
-  ensure_config ".codex/config.toml"
-  ensure_config ".agents/mcp_config.json"
+  # Repair only the config this agent reads; leave the others so a different-OS
+  # agent sharing this working tree keeps its own launcher. No agent argument
+  # (a manual run) heals every config for the current OS.
+  case "$agent" in
+    claude)      ensure_config ".mcp.json" ;;
+    cursor)      ensure_config ".cursor/mcp.json" ;;
+    codex)       ensure_config ".codex/config.toml" ;;
+    antigravity) ensure_config ".agents/mcp_config.json" ;;
+    *)
+      ensure_config ".mcp.json"
+      ensure_config ".cursor/mcp.json"
+      ensure_config ".codex/config.toml"
+      ensure_config ".agents/mcp_config.json"
+      ;;
+  esac
 else
   failed=$((failed + 1))
   failure_details="${failure_details}\n  - config editor: could not download or verify the pinned editor"
@@ -56,7 +72,7 @@ fi
 # Fill the binary cache ahead of the real MCP launch so a pruned or fresh
 # cache never turns into a silent memory outage.
 warm=ok
-"$target/.agents/mcp/memory/run.sh" prewarm >/dev/null 2>&1 || warm=failed
+"$target/.agent-parity/mcp/memory/run.sh" prewarm >/dev/null 2>&1 || warm=failed
 
 [ "$changed" -gt 0 ] || [ "$failed" -gt 0 ] || [ "$warm" = failed ] || exit 0
 if [ "$failed" -gt 0 ]; then
