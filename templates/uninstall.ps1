@@ -35,7 +35,7 @@ if ($agState -eq "valid") {
   Write-Output "AGENTS.md: has a legacy unmarked memory instruction -- remove it manually"
 }
 $gaText = Read-Text (Path-InTarget ".gitattributes")
-$gaState = Get-ManagedBlockState $gaText $GitIgnoreBegin $GitIgnoreEnd
+$gaState = Get-ManagedBlockState $gaText $HashMarkBegin $HashMarkEnd
 if ($gaState -eq "valid") {
   Strip-GitAttributesBlock
   $gaPath = Path-InTarget ".gitattributes"
@@ -53,7 +53,7 @@ if (Test-GitRepo) {
   }
 }
 $gitIgnoreText = Read-Text (Path-InTarget ".gitignore")
-$gitIgnoreState = Get-ManagedBlockState $gitIgnoreText $GitIgnoreBegin $GitIgnoreEnd
+$gitIgnoreState = Get-ManagedBlockState $gitIgnoreText $HashMarkBegin $HashMarkEnd
 if ($gitIgnoreState -eq "valid") {
   Strip-GitIgnoreBlock
   Write-Output ".gitignore: removed agent-parity block"

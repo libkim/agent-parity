@@ -17,15 +17,18 @@ CLAUDE_TGT=".claude/settings.json"
 # SessionStart runs through the project-local launcher. Claude chooses the host
 # shell; the launcher absorbs the Unix/Windows difference.
 CLAUDE_HOOK='.agent-parity/bin/agent-parity sync-claude'
+# Managed-block markers, one pair per comment syntax rather than per file:
+# the markdown form delimits the AGENTS.md block, and the hash form is shared
+# by .gitignore and .gitattributes.
 MARK_BEGIN="<!-- agent-parity:begin -->"
 MARK_END="<!-- agent-parity:end -->"
-GI_BEGIN="# agent-parity:begin"
-GI_END="# agent-parity:end"
+HASH_MARK_BEGIN="# agent-parity:begin"
+HASH_MARK_END="# agent-parity:end"
 # Memory files rarely change after creation, but an explicit edit on both
 # sides can conflict; a bundled git merge driver unions tags and resolves a
 # one-sided body edit instead of leaving conflict markers to the user.
 MERGE_DRIVER_CMD='.agent-parity/scripts/merge-memory.sh %O %A %B'
-GA_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
+GA_MERGE_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
 # git runs the merge driver and the pre-push guard through sh on every OS,
 # and the pre-push hook execs the script so its shebang has to survive. A
 # Windows checkout with the default core.autocrlf=true would hand sh a CRLF
@@ -416,7 +419,7 @@ managed_block_state() {
 strip_gitignore_block() {
   gi="$TARGET/.gitignore"
   TEMP_FILE=$(make_temp_for "$gi")
-  awk -v b="$GI_BEGIN" -v e="$GI_END" '
+  awk -v b="$HASH_MARK_BEGIN" -v e="$HASH_MARK_END" '
     { line = $0; sub(/\r$/, "", line) }
     line == b { inblock = 1; next }
     line == e { inblock = 0; next }
@@ -428,7 +431,7 @@ strip_gitignore_block() {
 strip_gitattributes_block() {
   ga="$TARGET/.gitattributes"
   TEMP_FILE=$(make_temp_for "$ga")
-  awk -v b="$GI_BEGIN" -v e="$GI_END" '
+  awk -v b="$HASH_MARK_BEGIN" -v e="$HASH_MARK_END" '
     { line = $0; sub(/\r$/, "", line) }
     line == b { inblock = 1; next }
     line == e { inblock = 0; next }
@@ -440,7 +443,7 @@ strip_gitattributes_block() {
 sync_gitattributes() {
   in_git_repo || return 0
   ga="$TARGET/.gitattributes"
-  state=$(managed_block_state "$ga" "$GI_BEGIN" "$GI_END")
+  state=$(managed_block_state "$ga" "$HASH_MARK_BEGIN" "$HASH_MARK_END")
   case "$state" in
     valid) strip_gitattributes_block ;;
     invalid)
@@ -450,10 +453,10 @@ sync_gitattributes() {
   esac
   [ -s "$ga" ] && [ -n "$(tail -c1 "$ga")" ] && echo >> "$ga"
   {
-    echo "$GI_BEGIN"
-    echo "$GA_LINE"
+    echo "$HASH_MARK_BEGIN"
+    echo "$GA_MERGE_LINE"
     echo "$GA_SH_LINE"
-    echo "$GI_END"
+    echo "$HASH_MARK_END"
   } >> "$ga"
   echo ".gitattributes: memory merge driver and LF-pinned agent-parity scripts"
 }
@@ -506,7 +509,7 @@ EOF
 sync_gitignore() {
   in_git_repo || return 0
   gi="$TARGET/.gitignore"
-  state=$(managed_block_state "$gi" "$GI_BEGIN" "$GI_END")
+  state=$(managed_block_state "$gi" "$HASH_MARK_BEGIN" "$HASH_MARK_END")
   case "$state" in
     valid) strip_gitignore_block ;;
     invalid)
@@ -537,9 +540,9 @@ sync_gitignore() {
   gi="$TARGET/.gitignore"
   [ -s "$gi" ] && [ -n "$(tail -c1 "$gi")" ] && echo >> "$gi"
   {
-    echo "$GI_BEGIN"
+    echo "$HASH_MARK_BEGIN"
     printf '%s' "$rules"
-    echo "$GI_END"
+    echo "$HASH_MARK_END"
   } >> "$gi"
   echo ".gitignore: updated managed block:"
   printf '%s' "$rules" | sed 's/^/  /'

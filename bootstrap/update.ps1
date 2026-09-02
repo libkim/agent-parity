@@ -53,15 +53,18 @@ $ClaudeTgt = ".claude/settings.json"
 # SessionStart runs through the project-local launcher. Claude chooses the host
 # shell; the launcher absorbs the Unix/Windows difference.
 $ClaudeHook = '.agent-parity/bin/agent-parity sync-claude'
+# Managed-block markers, one pair per comment syntax rather than per file:
+# the markdown form delimits the AGENTS.md block, and the hash form is shared
+# by .gitignore and .gitattributes.
 $MarkBegin = "<!-- agent-parity:begin -->"
 $MarkEnd = "<!-- agent-parity:end -->"
-$GitIgnoreBegin = "# agent-parity:begin"
-$GitIgnoreEnd = "# agent-parity:end"
+$HashMarkBegin = "# agent-parity:begin"
+$HashMarkEnd = "# agent-parity:end"
 # Memory files rarely change after creation, but an explicit edit on both
 # sides can conflict; a bundled git merge driver unions tags and resolves a
 # one-sided body edit instead of leaving conflict markers to the user.
 $MergeDriverCmd = '.agent-parity/scripts/merge-memory.sh %O %A %B'
-$GaLine = ".agent-parity/memory/*.md merge=agent-parity-memory"
+$GaMergeLine = ".agent-parity/memory/*.md merge=agent-parity-memory"
 # git runs the merge driver and the pre-push guard through sh on every OS,
 # and the pre-push hook execs the script so its shebang has to survive. A
 # Windows checkout with the default core.autocrlf=true would hand sh a CRLF
@@ -487,8 +490,8 @@ function Strip-GitIgnoreBlock {
   $out = New-Object System.Collections.Generic.List[string]
   $inBlock = $false
   foreach ($line in $lines) {
-    if ($line -eq $GitIgnoreBegin) { $inBlock = $true; continue }
-    if ($line -eq $GitIgnoreEnd) { $inBlock = $false; continue }
+    if ($line -eq $HashMarkBegin) { $inBlock = $true; continue }
+    if ($line -eq $HashMarkEnd) { $inBlock = $false; continue }
     if (!$inBlock) { $out.Add($line) }
   }
   Write-Text $gi (($out -join "`n").TrimEnd("`n") + "`n")
@@ -501,8 +504,8 @@ function Strip-GitAttributesBlock {
   $out = New-Object System.Collections.Generic.List[string]
   $inBlock = $false
   foreach ($line in $lines) {
-    if ($line -eq $GitIgnoreBegin) { $inBlock = $true; continue }
-    if ($line -eq $GitIgnoreEnd) { $inBlock = $false; continue }
+    if ($line -eq $HashMarkBegin) { $inBlock = $true; continue }
+    if ($line -eq $HashMarkEnd) { $inBlock = $false; continue }
     if (!$inBlock) { $out.Add($line) }
   }
   Write-Text $ga (($out -join "`n").TrimEnd("`n") + "`n")
@@ -511,7 +514,7 @@ function Strip-GitAttributesBlock {
 function Sync-GitAttributes {
   if (!(Test-GitRepo)) { return }
   $ga = Path-InTarget ".gitattributes"
-  $state = Get-ManagedBlockState (Read-Text $ga) $GitIgnoreBegin $GitIgnoreEnd
+  $state = Get-ManagedBlockState (Read-Text $ga) $HashMarkBegin $HashMarkEnd
   if ($state -eq "valid") { Strip-GitAttributesBlock }
   elseif ($state -eq "invalid") {
     Write-Output ".gitattributes: agent-parity markers are incomplete, duplicated, or out of order; file left unchanged -- repair the markers manually"
@@ -520,7 +523,7 @@ function Sync-GitAttributes {
   $text = Read-Text $ga
   if ($null -eq $text) { $text = "" }
   if ($text -ne "" -and !$text.EndsWith("`n")) { $text += "`n" }
-  $text += "$GitIgnoreBegin`n$GaLine`n$GaShLine`n$GitIgnoreEnd`n"
+  $text += "$HashMarkBegin`n$GaMergeLine`n$GaShLine`n$HashMarkEnd`n"
   Write-Text $ga $text
   Write-Output ".gitattributes: memory merge driver and LF-pinned agent-parity scripts"
 }
@@ -567,7 +570,7 @@ function Reg-PrePushHook {
 function Sync-GitIgnore {
   if (!(Test-GitRepo)) { return }
   $gi = Path-InTarget ".gitignore"
-  $state = Get-ManagedBlockState (Read-Text $gi) $GitIgnoreBegin $GitIgnoreEnd
+  $state = Get-ManagedBlockState (Read-Text $gi) $HashMarkBegin $HashMarkEnd
   if ($state -eq "valid") {
     Strip-GitIgnoreBlock
   } elseif ($state -eq "invalid") {
@@ -596,7 +599,7 @@ function Sync-GitIgnore {
   $existing = Read-Text $gi
   if ($null -eq $existing) { $existing = "" }
   if ($existing.Length -gt 0 -and !$existing.EndsWith("`n")) { $existing += "`n" }
-  $block = $GitIgnoreBegin + "`n" + (($rules | ForEach-Object { $_ }) -join "`n") + "`n" + $GitIgnoreEnd + "`n"
+  $block = $HashMarkBegin + "`n" + (($rules | ForEach-Object { $_ }) -join "`n") + "`n" + $HashMarkEnd + "`n"
   Write-Text $gi ($existing + $block)
   Write-Output ".gitignore: updated managed block:"
   $rules | ForEach-Object { Write-Output "  $_" }

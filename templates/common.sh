@@ -14,15 +14,12 @@ CLAUDE_TGT=".claude/settings.json"
 CLAUDE_HOOK='.agent-parity/bin/agent-parity sync-claude'
 MARK_BEGIN="<!-- agent-parity:begin -->"
 MARK_END="<!-- agent-parity:end -->"
-GI_BEGIN="# agent-parity:begin"
-GI_END="# agent-parity:end"
+HASH_MARK_BEGIN="# agent-parity:begin"
+HASH_MARK_END="# agent-parity:end"
 MERGE_DRIVER_CMD='.agent-parity/scripts/merge-memory.sh %O %A %B'
-GA_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
-# git runs the merge driver and the pre-push guard through sh on every OS,
-# and the pre-push hook execs the script so its shebang has to survive. A
-# Windows checkout with the default core.autocrlf=true would hand sh a CRLF
-# script, so pin our own scripts to LF. Scoped to our directory: the target
-# repo's other shell scripts stay the user's call.
+GA_MERGE_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
+# git runs our merge driver and pre-push guard through sh on every OS, so the
+# scripts stay LF; the target repo's own shell scripts are left alone.
 GA_SH_LINE=".agent-parity/**/*.sh text eol=lf"
 PRE_PUSH_MARKER='# agent-parity managed pre-push hook'
 # Everything install may create at the target's top level. gitignore syncing
@@ -271,7 +268,7 @@ managed_block_state() {
 strip_gitignore_block() {
   gi="$TARGET/.gitignore"
   make_local_temp_for "$gi"
-  awk -v b="$GI_BEGIN" -v e="$GI_END" '
+  awk -v b="$HASH_MARK_BEGIN" -v e="$HASH_MARK_END" '
     { line = $0; sub(/\r$/, "", line) }
     line == b { inblock = 1; next }
     line == e { inblock = 0; next }
@@ -283,7 +280,7 @@ strip_gitignore_block() {
 strip_gitattributes_block() {
   ga="$TARGET/.gitattributes"
   make_local_temp_for "$ga"
-  awk -v b="$GI_BEGIN" -v e="$GI_END" '
+  awk -v b="$HASH_MARK_BEGIN" -v e="$HASH_MARK_END" '
     { line = $0; sub(/\r$/, "", line) }
     line == b { inblock = 1; next }
     line == e { inblock = 0; next }

@@ -42,7 +42,7 @@ case "$ag_state" in
   invalid) echo "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; repair them manually" ;;
 esac
 gi="$TARGET/.gitignore"
-gi_state=$(managed_block_state "$gi" "$GI_BEGIN" "$GI_END")
+gi_state=$(managed_block_state "$gi" "$HASH_MARK_BEGIN" "$HASH_MARK_END")
 if [ "$gi_state" = invalid ]; then
   echo ".gitignore: agent-parity markers are incomplete, duplicated, or out of order; repair them manually"
 fi

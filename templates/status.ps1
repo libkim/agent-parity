@@ -34,7 +34,7 @@ $agState = Get-ManagedBlockState $agText $MarkBegin $MarkEnd
 if ($agState -eq "valid") { Write-Output "AGENTS.md: agent-parity instruction block present" }
 elseif ($agState -eq "absent") { Write-Output "AGENTS.md: agent-parity instruction block missing" }
 else { Write-Output "AGENTS.md: agent-parity markers are incomplete, duplicated, or out of order; repair them manually" }
-$gitIgnoreState = Get-ManagedBlockState (Read-Text (Path-InTarget ".gitignore")) $GitIgnoreBegin $GitIgnoreEnd
+$gitIgnoreState = Get-ManagedBlockState (Read-Text (Path-InTarget ".gitignore")) $HashMarkBegin $HashMarkEnd
 if ($gitIgnoreState -eq "invalid") { Write-Output ".gitignore: agent-parity markers are incomplete, duplicated, or out of order; repair them manually" }
 $store = Path-InTarget $StoreDir
 if (Test-Path -LiteralPath $store -PathType Container) {
