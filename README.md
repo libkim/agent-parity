@@ -365,7 +365,7 @@ your own skills, not these.
 | `.mcp.json` | memory server registered for Claude Code |
 | `AGENTS.md` | instruction block, delimited by markers |
 | `CLAUDE.md` | `@AGENTS.md` import wrapper |
-| `.gitattributes` | managed block routing memory files to the merge driver |
+| `.gitattributes` | managed block routing memory files to the merge driver and pinning agent-parity's own shell scripts to LF |
 | `.gitignore` | managed marker block when exclusions would hide installed wiring or generated Claude files |
 
 `install.sh` / `install.ps1` are remote install-only entrypoints. For

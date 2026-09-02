@@ -62,6 +62,12 @@ $GitIgnoreEnd = "# agent-parity:end"
 # one-sided body edit instead of leaving conflict markers to the user.
 $MergeDriverCmd = '.agent-parity/scripts/merge-memory.sh %O %A %B'
 $GaLine = ".agent-parity/memory/*.md merge=agent-parity-memory"
+# git runs the merge driver and the pre-push guard through sh on every OS,
+# and the pre-push hook execs the script so its shebang has to survive. A
+# Windows checkout with the default core.autocrlf=true would hand sh a CRLF
+# script, so pin our own scripts to LF. Scoped to our directory: the target
+# repo's other shell scripts stay the user's call.
+$GaShLine = ".agent-parity/**/*.sh text eol=lf"
 $PrePushMarker = '# agent-parity managed pre-push hook'
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", ".agent-parity", "AGENTS.md", "CLAUDE.md")
 # Manifest diff: everything older supported releases created that the current
@@ -513,9 +519,9 @@ function Sync-GitAttributes {
   $text = Read-Text $ga
   if ($null -eq $text) { $text = "" }
   if ($text -ne "" -and !$text.EndsWith("`n")) { $text += "`n" }
-  $text += "$GitIgnoreBegin`n$GaLine`n$GitIgnoreEnd`n"
+  $text += "$GitIgnoreBegin`n$GaLine`n$GaShLine`n$GitIgnoreEnd`n"
   Write-Text $ga $text
-  Write-Output ".gitattributes: memory files use the agent-parity merge driver"
+  Write-Output ".gitattributes: memory merge driver and LF-pinned agent-parity scripts"
 }
 
 # The driver definition lives in .git/config, which git never carries; the

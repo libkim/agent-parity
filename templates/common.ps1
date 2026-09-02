@@ -23,6 +23,12 @@ $GitIgnoreBegin = "# agent-parity:begin"
 $GitIgnoreEnd = "# agent-parity:end"
 $MergeDriverCmd = '.agent-parity/scripts/merge-memory.sh %O %A %B'
 $GaLine = ".agent-parity/memory/*.md merge=agent-parity-memory"
+# git runs the merge driver and the pre-push guard through sh on every OS,
+# and the pre-push hook execs the script so its shebang has to survive. A
+# Windows checkout with the default core.autocrlf=true would hand sh a CRLF
+# script, so pin our own scripts to LF. Scoped to our directory: the target
+# repo's other shell scripts stay the user's call.
+$GaShLine = ".agent-parity/**/*.sh text eol=lf"
 $PrePushMarker = '# agent-parity managed pre-push hook'
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", ".agent-parity", "AGENTS.md", "CLAUDE.md")
 $ParityBreakers = @(

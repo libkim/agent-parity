@@ -18,6 +18,12 @@ GI_BEGIN="# agent-parity:begin"
 GI_END="# agent-parity:end"
 MERGE_DRIVER_CMD='.agent-parity/scripts/merge-memory.sh %O %A %B'
 GA_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
+# git runs the merge driver and the pre-push guard through sh on every OS,
+# and the pre-push hook execs the script so its shebang has to survive. A
+# Windows checkout with the default core.autocrlf=true would hand sh a CRLF
+# script, so pin our own scripts to LF. Scoped to our directory: the target
+# repo's other shell scripts stay the user's call.
+GA_SH_LINE=".agent-parity/**/*.sh text eol=lf"
 PRE_PUSH_MARKER='# agent-parity managed pre-push hook'
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.

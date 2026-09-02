@@ -239,7 +239,7 @@ agent-parity는 에이전트의 내장 auto-memory를 꺼서, 메모리가 에�
 | `.mcp.json` | Claude Code에 메모리 서버 등록 |
 | `AGENTS.md` | 마커로 구분된 지침 블록 |
 | `CLAUDE.md` | `@AGENTS.md` 임포트 래퍼 |
-| `.gitattributes` | 메모리 파일을 머지 드라이버로 보내는 관리 블록 |
+| `.gitattributes` | 메모리 파일을 머지 드라이버로 보내고 agent-parity 자체 셸 스크립트를 LF로 고정하는 관리 블록 |
 | `.gitignore` | 제외 규칙이 설치한 관리 대상 파일이나 생성된 Claude 파일을 가릴 때 사용하는 관리 마커 블록 |
 
 `install.sh` / `install.ps1`은 원격 설치 전용 진입점입니다. `agent-parity update`를 실행하면 프로젝트 런처가 최신 릴리스의 버전 내장 `update.sh` / `update.ps1` asset을 받습니다. 스크립트에 내장된 버전이 동일 태그의 Raw 템플릿과 설정 편집기 asset을 선택하고 MCP 런처 메타데이터도 그 릴리스로 고정합니다. `.agent-parity/scripts`에는 업데이트 파일을 두지 않습니다.

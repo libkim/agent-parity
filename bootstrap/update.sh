@@ -26,6 +26,12 @@ GI_END="# agent-parity:end"
 # one-sided body edit instead of leaving conflict markers to the user.
 MERGE_DRIVER_CMD='.agent-parity/scripts/merge-memory.sh %O %A %B'
 GA_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
+# git runs the merge driver and the pre-push guard through sh on every OS,
+# and the pre-push hook execs the script so its shebang has to survive. A
+# Windows checkout with the default core.autocrlf=true would hand sh a CRLF
+# script, so pin our own scripts to LF. Scoped to our directory: the target
+# repo's other shell scripts stay the user's call.
+GA_SH_LINE=".agent-parity/**/*.sh text eol=lf"
 # Marks the pre-push hook we own, so we update ours but never clobber a
 # hook the user wrote.
 PRE_PUSH_MARKER='# agent-parity managed pre-push hook'
@@ -446,9 +452,10 @@ sync_gitattributes() {
   {
     echo "$GI_BEGIN"
     echo "$GA_LINE"
+    echo "$GA_SH_LINE"
     echo "$GI_END"
   } >> "$ga"
-  echo ".gitattributes: memory files use the agent-parity merge driver"
+  echo ".gitattributes: memory merge driver and LF-pinned agent-parity scripts"
 }
 
 # The driver definition lives in .git/config, which git never carries; the

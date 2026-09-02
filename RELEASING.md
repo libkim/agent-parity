@@ -36,7 +36,7 @@ source before tagging.
    VERSION=v0.0.0-ci bash build.sh
    for t in test_release_assets test_markers test_uninstall test_install_markers \
             test_readme_install test_zero_install test_memory_merge test_update \
-            test_pre_push test_launcher_store_dir; do
+            test_pre_push test_launcher_store_dir test_gitattributes; do
      sh tests/$t.sh v0.0.0-ci 2>/dev/null || sh tests/$t.sh
    done
    ```
@@ -71,6 +71,7 @@ Feature × OS (agent-neutral core):
 | release assets + version stamp | test_release_assets.sh | release job |
 | marker blocks | test_markers.sh | test_markers.ps1 |
 | memory merge driver | test_memory_merge.sh | test_memory_merge.sh (git bash) |
+| .gitattributes managed block | test_gitattributes.sh | (unix only; the LF pin it writes is what the windows checkout needs) |
 | atomic write | (Go) | test_atomic_write.ps1 |
 | update idempotence | test_update.sh | test_install_windows.ps1 |
 | CRLF / newlines | (Go parseEntry) | test_powershell_newlines.ps1 |
