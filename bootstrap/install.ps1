@@ -71,6 +71,9 @@ $GaMergeLine = ".agent-parity/memory/*.md merge=agent-parity-memory"
 # script, so pin our own scripts to LF. Scoped to our directory: the target
 # repo's other shell scripts stay the user's call.
 $GaShLine = ".agent-parity/**/*.sh text eol=lf"
+# The project launcher is the same kind of shell script with no .sh name,
+# so the suffix rule above misses it.
+$GaLauncherLine = ".agent-parity/bin/agent-parity text eol=lf"
 $PrePushMarker = '# agent-parity managed pre-push hook'
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", ".agent-parity", "AGENTS.md", "CLAUDE.md")
 # Manifest diff: everything older supported releases created that the current
@@ -127,9 +130,21 @@ function Match-Newlines([string]$Text, [string]$ReferencePath) {
   return (($Text.Replace("`r`n", "`n")).Replace("`r", "`n")).Replace("`n", $newline)
 }
 
+# Files that must land as LF whatever is already on disk. git runs the merge
+# driver and the pre-push guard through sh on every OS, and a CRLF shebang
+# leaves sh hunting for an interpreter named "sh\r", so matching the newlines
+# a Windows checkout left behind would keep a broken install broken. The suffix
+# covers the scripts; the launcher and the generated hook are the same kind of
+# file under a name that does not end in .sh.
+function Test-LfRequired([string]$Path) {
+  if ($Path -like "*.sh") { return $true }
+  $leaf = Split-Path -Leaf $Path
+  return ($leaf -eq "agent-parity" -or $leaf -eq "pre-push")
+}
+
 function Write-Text([string]$Path, [string]$Text) {
   Ensure-Parent $Path
-  if (Test-Path -LiteralPath $Path -PathType Leaf) {
+  if ((Test-Path -LiteralPath $Path -PathType Leaf) -and !(Test-LfRequired $Path)) {
     $Text = Match-Newlines $Text $Path
   }
   $enc = New-Object System.Text.UTF8Encoding($false)
@@ -328,7 +343,7 @@ function Install-Server {
     foreach ($name in @("run.sh", "run.cmd")) {
       $final = Join-Path $dest $name
       $content = (Fetch-Text "templates/$name").TrimEnd("`r", "`n") + $(if ($name -eq "run.cmd") { "`r`n" } else { "`n" })
-      $content = Match-Newlines $content $final
+      if (!(Test-LfRequired $final)) { $content = Match-Newlines $content $final }
       Write-Text (Join-Path $stage $name) $content
     }
     foreach ($entry in @(@("VERSION", $Version + "`n"), @("RELEASE", $Release.TrimEnd('/') + "`n"))) {
@@ -522,7 +537,7 @@ function Sync-GitAttributes {
   $text = Read-Text $ga
   if ($null -eq $text) { $text = "" }
   if ($text -ne "" -and !$text.EndsWith("`n")) { $text += "`n" }
-  $text += "$HashMarkBegin`n$GaMergeLine`n$GaShLine`n$HashMarkEnd`n"
+  $text += "$HashMarkBegin`n$GaMergeLine`n$GaShLine`n$GaLauncherLine`n$HashMarkEnd`n"
   Write-Text $ga $text
   Write-Output ".gitattributes: memory merge driver and LF-pinned agent-parity scripts"
 }
@@ -538,7 +553,8 @@ function Reg-MergeDriver {
 
 # .git/hooks is never carried by git, so drop in a thin pre-push shim that runs
 # the tracked guard script. We own it only when our marker is present, so a
-# user's own hook is left untouched. Write-Text keeps the LF newlines git needs.
+# user's own hook is left untouched. Write-Text forces LF here (Test-LfRequired),
+# so a hook left CRLF by an older install is repaired rather than matched.
 function Get-PrePushHookPath {
   $hp = & git -C $Target rev-parse --git-path hooks 2>$null
   if ($LASTEXITCODE -ne 0) { return $null }

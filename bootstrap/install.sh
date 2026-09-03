@@ -35,6 +35,9 @@ GA_MERGE_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
 # script, so pin our own scripts to LF. Scoped to our directory: the target
 # repo's other shell scripts stay the user's call.
 GA_SH_LINE=".agent-parity/**/*.sh text eol=lf"
+# The project launcher is the same kind of shell script with no .sh name,
+# so the suffix rule above misses it.
+GA_LAUNCHER_LINE=".agent-parity/bin/agent-parity text eol=lf"
 # Marks the pre-push hook we own, so we update ours but never clobber a
 # hook the user wrote.
 PRE_PUSH_MARKER='# agent-parity managed pre-push hook'
@@ -456,6 +459,7 @@ sync_gitattributes() {
     echo "$HASH_MARK_BEGIN"
     echo "$GA_MERGE_LINE"
     echo "$GA_SH_LINE"
+    echo "$GA_LAUNCHER_LINE"
     echo "$HASH_MARK_END"
   } >> "$ga"
   echo ".gitattributes: memory merge driver and LF-pinned agent-parity scripts"

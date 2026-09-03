@@ -33,6 +33,8 @@ grep -q '^\.agent-parity/memory/\*\.md merge=agent-parity-memory$' "$root/.gitat
   { echo "merge driver rule missing" >&2; cat "$root/.gitattributes" >&2; exit 1; }
 grep -q '^\.agent-parity/\*\*/\*\.sh text eol=lf$' "$root/.gitattributes" ||
   { echo "script LF pin missing" >&2; cat "$root/.gitattributes" >&2; exit 1; }
+grep -q '^\.agent-parity/bin/agent-parity text eol=lf$' "$root/.gitattributes" ||
+  { echo "launcher LF pin missing" >&2; cat "$root/.gitattributes" >&2; exit 1; }
 grep -q '^\*\.png binary$' "$root/.gitattributes" ||
   { echo "user rule was dropped" >&2; exit 1; }
 
@@ -41,7 +43,7 @@ grep -q '^\*\.png binary$' "$root/.gitattributes" ||
 mkdir -p "$root/scripts"
 printf '#!/bin/sh\n' > "$root/scripts/user.sh"
 for f in .agent-parity/scripts/pre-push.sh .agent-parity/scripts/merge-memory.sh \
-         .agent-parity/mcp/memory/run.sh; do
+         .agent-parity/mcp/memory/run.sh .agent-parity/bin/agent-parity; do
   attr=$(git -C "$root" check-attr eol -- "$f")
   case "$attr" in
     *": eol: lf") ;;
@@ -57,7 +59,7 @@ esac
 # Converging again must rewrite the block in place, not stack a second copy.
 printf '%s\n' v9.8.6 > "$root/.agent-parity/mcp/memory/VERSION"
 install_target update.sh
-[ "$(grep -c 'text eol=lf' "$root/.gitattributes")" = 1 ] ||
+[ "$(grep -c 'text eol=lf' "$root/.gitattributes")" = 2 ] ||
   { echo "block was duplicated" >&2; cat "$root/.gitattributes" >&2; exit 1; }
 
 # Uninstall strips by marker, so it removes both rules and keeps the user's.

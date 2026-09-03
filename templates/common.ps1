@@ -26,6 +26,9 @@ $GaMergeLine = ".agent-parity/memory/*.md merge=agent-parity-memory"
 # git runs our merge driver and pre-push guard through sh on every OS, so the
 # scripts stay LF; the target repo's own shell scripts are left alone.
 $GaShLine = ".agent-parity/**/*.sh text eol=lf"
+# The project launcher is the same kind of shell script with no .sh name,
+# so the suffix rule above misses it.
+$GaLauncherLine = ".agent-parity/bin/agent-parity text eol=lf"
 $PrePushMarker = '# agent-parity managed pre-push hook'
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", ".agent-parity", "AGENTS.md", "CLAUDE.md")
 $ParityBreakers = @(

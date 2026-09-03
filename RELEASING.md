@@ -74,7 +74,8 @@ Feature × OS (agent-neutral core):
 | .gitattributes managed block | test_gitattributes.sh | (unix only; the LF pin it writes is what the windows checkout needs) |
 | atomic write | (Go) | test_atomic_write.ps1 |
 | update idempotence | test_update.sh | test_install_windows.ps1 |
-| CRLF / newlines | (Go parseEntry) | test_powershell_newlines.ps1 |
+| CRLF / newlines | (Go parseEntry, Store.write) | test_powershell_newlines.ps1 |
+| LF forced for our shell entry points | (sh installer writes LF) | test_powershell_newlines.ps1 (Test-LfRequired cases) |
 | pre-push, shell path | test_pre_push.sh | n/a |
 | pre-push, PowerShell path | n/a | test_pre_push_windows.ps1 |
 | launcher command dispatch | (native sh launcher) | test_git_bash.sh (git bash → .cmd) |
