@@ -74,12 +74,17 @@ func mergeMemoryFiles(basePath, oursPath, theirsPath string) error {
 	if ours.Type == "governance" || theirs.Type == "governance" {
 		merged.Type = "governance"
 	}
+	merged.Status = mergeStatus(hasBase, base.Status, ours.Status, theirs.Status)
 
-	// Mirror the server's writer (store.go write): emit type only for
-	// governance, so context memories and pre-type files stay byte-identical.
+	// Mirror the server's writer (store.go write): emit type and status only
+	// when they are not the default, so context memories and files written
+	// before those fields existed stay byte-identical.
 	fm := frontmatter{Created: merged.Created, Tags: merged.Tags}
 	if merged.Type == "governance" {
 		fm.Type = "governance"
+	}
+	if st := memoryStatus(merged.Status); st != "active" {
+		fm.Status = st
 	}
 	y, err := yaml.Marshal(fm)
 	if err != nil {
@@ -90,6 +95,35 @@ func mergeMemoryFiles(basePath, oursPath, theirsPath string) error {
 	// git merge, and a sync client watching the folder must never see a
 	// half-written memory file.
 	return atomicWrite(oursPath, []byte(content), 0o644)
+}
+
+// mergeStatus reconciles the lifecycle field the same way the body is
+// reconciled: if only one side moved away from the base, that side wins. When
+// both sides moved there is no such answer, so the values decide. Retirement
+// outranks active, because a rule someone retired must not come back to life
+// just because the other machine still had it running; between the two retired
+// values, which only disagree on why the rule was retired, deprecated wins. A
+// missing base leaves no way to tell who moved, so it takes the same path.
+func mergeStatus(hasBase bool, base, ours, theirs string) string {
+	b, o, t := memoryStatus(base), memoryStatus(ours), memoryStatus(theirs)
+	if o == t {
+		return o
+	}
+	if hasBase {
+		if o == b {
+			return t
+		}
+		if t == b {
+			return o
+		}
+	}
+	if o == "active" {
+		return t
+	}
+	if t == "active" {
+		return o
+	}
+	return "deprecated"
 }
 
 // mergeTags keeps ours (which reflects any removals made there) and adds the

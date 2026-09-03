@@ -217,3 +217,94 @@ func TestMergeMemoryContextStaysUntyped(t *testing.T) {
 		t.Fatalf("context memory gained a type field:\n%s", raw)
 	}
 }
+
+// statusFixture is a governance memory carrying an explicit lifecycle status.
+// An empty status writes no field at all, which is how "active" is stored.
+func statusFixture(body, status string, tags ...string) string {
+	var b strings.Builder
+	b.WriteString("---\ncreated: 2026-07-01T00:00:00Z\n")
+	if len(tags) > 0 {
+		b.WriteString("tags:\n")
+		for _, tag := range tags {
+			b.WriteString("    - " + tag + "\n")
+		}
+	}
+	b.WriteString("type: governance\n")
+	if status != "" {
+		b.WriteString("status: " + status + "\n")
+	}
+	b.WriteString("---\n" + body + "\n")
+	return b.String()
+}
+
+// Retiring a rule has to survive a cross-machine merge. The driver used to
+// build the frontmatter without the status field, so any merge silently put a
+// deprecated rule back into every session.
+func TestMergeMemoryReconcilesStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		base, ours, theirs, want string
+	}{
+		{"one side retires", "", "deprecated", "", "deprecated"},
+		{"other side retires", "", "", "merged", "merged"},
+		{"one side reactivates", "deprecated", "", "deprecated", ""},
+		{"both agree", "", "deprecated", "deprecated", "deprecated"},
+		// Both moved: no side is the unchanged one, so the values decide.
+		{"retired for different reasons", "", "deprecated", "merged", "deprecated"},
+		{"reactivation loses to retirement", "deprecated", "", "merged", "merged"},
+		{"reactivation loses to deprecation", "merged", "", "deprecated", "deprecated"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			base := writeMergeFixture(t, dir, "base.md", statusFixture("rule body", tc.base, "a"))
+			ours := writeMergeFixture(t, dir, "ours.md", statusFixture("rule body", tc.ours, "a"))
+			theirs := writeMergeFixture(t, dir, "theirs.md", statusFixture("rule body", tc.theirs, "a", "b"))
+
+			if err := mergeMemoryFiles(base, ours, theirs); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(ours)
+			if err != nil {
+				t.Fatal(err)
+			}
+			e, err := parseEntry("merged", raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if memoryStatus(e.Status) != memoryStatus(tc.want) {
+				t.Fatalf("status = %q, want %q\n%s", e.Status, tc.want, raw)
+			}
+			// Active is the default, so it must not be written out.
+			if tc.want == "" && strings.Contains(string(raw), "status:") {
+				t.Fatalf("active status was written to the file:\n%s", raw)
+			}
+			if e.Type != "governance" {
+				t.Fatalf("type = %q, want governance", e.Type)
+			}
+		})
+	}
+}
+
+// A memory with no common ancestor leaves no way to tell which side moved, so
+// the same value-based rule applies rather than a silent fall back to active.
+func TestMergeMemoryStatusWithoutBase(t *testing.T) {
+	dir := t.TempDir()
+	base := writeMergeFixture(t, dir, "base.md", "")
+	ours := writeMergeFixture(t, dir, "ours.md", statusFixture("rule body", "", "a"))
+	theirs := writeMergeFixture(t, dir, "theirs.md", statusFixture("rule body", "deprecated", "a"))
+
+	if err := mergeMemoryFiles(base, ours, theirs); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(ours)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := parseEntry("merged", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Status != "deprecated" {
+		t.Fatalf("status = %q, want deprecated\n%s", e.Status, raw)
+	}
+}

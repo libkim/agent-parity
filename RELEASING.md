@@ -71,6 +71,7 @@ Feature × OS (agent-neutral core):
 | release assets + version stamp | test_release_assets.sh | release job |
 | marker blocks | test_markers.sh | test_markers.ps1 |
 | memory merge driver | test_memory_merge.sh | test_memory_merge.sh (git bash) |
+| governance lifecycle across a merge | (Go mergeStatus) | (Go mergeStatus) |
 | .gitattributes managed block | test_gitattributes.sh | (unix only; the LF pin it writes is what the windows checkout needs) |
 | atomic write | (Go) | test_atomic_write.ps1 |
 | update idempotence | test_update.sh | test_install_windows.ps1 |
