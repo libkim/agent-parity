@@ -41,13 +41,23 @@ type frontmatter struct {
 	Status  string    `yaml:"status,omitempty"`
 }
 
-// memoryType canonicalizes the type: "governance" only when explicitly set,
-// otherwise "context" (the default and the meaning of a missing field).
+// memoryType canonicalizes the type of a memory read from disk: "governance"
+// only when explicitly set, otherwise "context" (the default and the meaning of
+// a missing field). Reading stays lenient so a file written by a newer version,
+// or one from before the field existed, still loads. Add validates instead --
+// see validMemoryType -- because a typo there would silently file a standing
+// rule as ordinary working memory.
 func memoryType(t string) string {
 	if t == "governance" {
 		return "governance"
 	}
 	return "context"
+}
+
+// validMemoryType reports whether a caller-supplied type is one this API
+// accepts. Empty means the caller did not choose, which is context.
+func validMemoryType(t string) bool {
+	return t == "" || t == "context" || t == "governance"
 }
 
 // memoryStatus canonicalizes the status: "deprecated" or "merged" only when
@@ -78,11 +88,17 @@ func NewStore(dir string) (*Store, error) {
 func (s *Store) path(id string) string { return filepath.Join(s.dir, id+".md") }
 
 // Add writes a new memory and returns it. typ is "governance" or "context"
-// (empty defaults to context).
+// (empty defaults to context); anything else is refused rather than filed as
+// context, since a caller that misspells "governance" means to write a standing
+// rule and would otherwise get a success response for a memory no session ever
+// receives.
 func (s *Store) Add(body string, tags []string, typ string) (Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if !validMemoryType(typ) {
+		return Entry{}, fmt.Errorf("invalid type %q (want governance, context, or empty for context)", typ)
+	}
 	now := time.Now().UTC()
 	e := Entry{
 		ID:      fmt.Sprintf("%d", now.UnixNano()),

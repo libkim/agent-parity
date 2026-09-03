@@ -27,7 +27,7 @@ var store *Store
 type AddInput struct {
 	Text string   `json:"text" jsonschema:"the memory to store: an intent, interest, recurring topic, or decision and its reason"`
 	Tags []string `json:"tags,omitempty" jsonschema:"optional tags"`
-	Type string   `json:"type,omitempty" jsonschema:"'governance' for a durable project rule that is delivered into every future session automatically; omit or 'context' for ordinary working memory recalled on demand"`
+	Type string   `json:"type,omitempty" jsonschema:"'governance' for a durable project rule that is delivered into every future session automatically, or 'context' (the default) for ordinary working memory recalled on demand. No other value is accepted -- a misspelled 'governance' is refused rather than filed as context"`
 }
 type AddOutput struct {
 	ID string `json:"id"`

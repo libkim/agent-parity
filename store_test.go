@@ -260,6 +260,44 @@ func TestGovernanceStatusLifecycle(t *testing.T) {
 	}
 }
 
+// A caller that misspells the type means to write a standing rule. Filing it as
+// context would hand back a success response for a memory no session receives,
+// so Add refuses; parseEntry stays lenient so files keep loading.
+func TestAddRejectsUnknownTypeButParsingStaysLenient(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.Add("rule", []string{"a"}, "goverance"); err == nil {
+		t.Fatal("Add accepted a misspelled type")
+	}
+	if entries, _ := s.Recent(10); len(entries) != 0 {
+		t.Fatalf("refused Add must not write a file, got %+v", entries)
+	}
+
+	for _, typ := range []string{"", "context", "governance"} {
+		if _, err := s.Add("body", []string{"a"}, typ); err != nil {
+			t.Fatalf("Add(%q) = %v, want accepted", typ, err)
+		}
+	}
+
+	// A file carrying a type this version does not know still loads as context
+	// rather than failing the whole store.
+	raw := "---\ncreated: 2026-07-01T00:00:00Z\ntags:\n    - a\ntype: future\n---\nbody\n"
+	if err := os.WriteFile(filepath.Join(dir, "999.md"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get("999")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != "context" {
+		t.Fatalf("unknown type on disk = %q, want context", got.Type)
+	}
+}
+
 func TestLegacyGovernanceWithoutStatusIsActive(t *testing.T) {
 	dir := t.TempDir()
 	s, err := NewStore(dir)
