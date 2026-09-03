@@ -190,14 +190,14 @@ agent-parity가 함께 설치하는 memory 서버는 메모리를 파일로 저�
 | `memory_recent` | 최근 context 메모리를 최신순으로 반환 |
 | `memory_search` | 태그·본문 키워드로 검색하며 태그 일치를 본문 일치보다 위로 |
 | `memory_get` | id로 메모리 하나 조회 |
-| `memory_update` | 메모리를 은퇴시킴: status를 deprecated 또는 merged로 변경 |
+| `memory_update` | governance 규칙을 은퇴시킴: status를 deprecated 또는 merged로 변경 |
 | `memory_governance` | 폐기·통합된 것까지 governance를 status별로 나열 |
 
 각 메모리는 `created`, `tags` 프론트매터를 가진 마크다운 파일입니다. 랭킹이 정적이라 읽기가 파일을 재기록하지 않습니다.
 
 agent-parity는 에이전트의 내장 auto-memory를 꺼서, 메모리가 에이전트 자체의 머신 로컬 저장소가 아니라 이 공유 저장소 한 곳에 모입니다.
 
-메모리는 두 가지 타입 중 하나입니다. **context**(기본값)는 일반 작업 메모리로 `memory_recent`·`memory_search`가 돌려줍니다. **governance**(`memory_add`에 `type: governance`)는 프로젝트 상시 규칙으로, 서버가 모든 governance 메모리를 시작 시 instructions에 실어 매 세션이 자동으로 받습니다. 대신 `memory_recent`·`memory_search`에서는 제외해 작업 결과를 밀어내지 않습니다. governance는 매 세션 컨텍스트 비용이 드니 소수로 큐레이트합니다. 세션 도중 저장한 governance는 다음 세션부터 적용되며, 그 세션에는 이미 대화 맥락에 있습니다. 더 이상 유효하지 않거나 더 넓은 규칙으로 합쳐진 governance는 `memory_update`로 물러나게 합니다. status를 `deprecated`나 `merged`로 바꾸면 시작 instructions에서 빠지고, 파일은 이력용으로 남습니다. 은퇴는 일방향이라 되돌릴 수 없습니다. 물러난 규칙을 다시 적용하려면, 사유가 더 이상 기록에 남아 있지 않은 옛 문구를 되살리는 대신 현재 규칙을 새 governance 메모리로 씁니다. `memory_governance`는 폐기·통합된 것까지 status별로 나열하므로 무엇이 왜 물러났는지 검토한 뒤 대체 규칙을 쓸 수 있습니다. `memory_recent`·`memory_search`는 governance를 반환하지 않습니다. 주입되는 규칙은 각 줄에 메모리 id가 붙어 있어 에이전트가 그 자리에서 은퇴시킬 수 있습니다.
+메모리는 두 가지 타입 중 하나입니다. **context**(기본값)는 일반 작업 메모리로 `memory_recent`·`memory_search`가 돌려줍니다. **governance**(`memory_add`에 `type: governance`)는 프로젝트 상시 규칙으로, 서버가 모든 governance 메모리를 시작 시 instructions에 실어 매 세션이 자동으로 받습니다. 대신 `memory_recent`·`memory_search`에서는 제외해 작업 결과를 밀어내지 않습니다. governance는 매 세션 컨텍스트 비용이 드니 소수로 큐레이트합니다. 세션 도중 저장한 governance는 다음 세션부터 적용되며, 그 세션에는 이미 대화 맥락에 있습니다. 더 이상 유효하지 않거나 더 넓은 규칙으로 합쳐진 governance는 `memory_update`로 물러나게 합니다. status를 `deprecated`나 `merged`로 바꾸면 시작 instructions에서 빠지고, 파일은 이력용으로 남습니다. 생명주기는 무엇이 주입되는지를 정하는 것이라 governance에만 적용되며, 주입되지 않는 context 메모리에는 쓸 수 없습니다. 은퇴는 일방향이라 되돌릴 수 없습니다. 물러난 규칙을 다시 적용하려면, 사유가 더 이상 기록에 남아 있지 않은 옛 문구를 되살리는 대신 현재 규칙을 새 governance 메모리로 씁니다. `memory_governance`는 폐기·통합된 것까지 status별로 나열하므로 무엇이 왜 물러났는지 검토한 뒤 대체 규칙을 쓸 수 있습니다. `memory_recent`·`memory_search`는 governance를 반환하지 않습니다. 주입되는 규칙은 각 줄에 메모리 id가 붙어 있어 에이전트가 그 자리에서 은퇴시킬 수 있습니다.
 
 메모리는 보통 고유 ID로 한 번 생성되므로 두 머신이 같은 파일을 건드릴 일이 드뭅니다. 양쪽에서 같은 파일을 명시적으로 편집한 경우, 함께 설치되는 git 머지 드라이버가 태그를 union하고, 한쪽만 본문을 바꿨으면 그 본문을 취합니다. 양쪽이 본문을 다르게 바꾸면 원래대로 충돌합니다.
 

@@ -289,7 +289,7 @@ func (s *Store) Get(id string) (Entry, error) {
 	return s.read(id)
 }
 
-// Update retires an existing memory. status must be "deprecated" or "merged":
+// Update retires an existing governance memory. status must be "deprecated" or "merged":
 // retirement is one-way, so there is no path back to active. A governance
 // memory that is not active is dropped from the server Instructions, so this is
 // how a standing rule stops applying without deleting its file, and a rule that
@@ -310,6 +310,13 @@ func (s *Store) Update(id, status string) (Entry, error) {
 	e, err := s.read(id)
 	if err != nil {
 		return Entry{}, err
+	}
+	// The lifecycle exists so a standing rule can stop being injected. Context
+	// memories are never injected, so a status on one would record an intent
+	// nothing acts on: recent and search would keep returning it exactly as
+	// before. Refuse rather than report success for a no-op.
+	if e.Type != "governance" {
+		return Entry{}, fmt.Errorf("%s is a context memory: the lifecycle status applies to governance memories only", id)
 	}
 	e.Status = status
 	if err := s.write(e); err != nil {

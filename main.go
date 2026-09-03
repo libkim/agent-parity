@@ -97,7 +97,7 @@ func getHandler(ctx context.Context, req *mcp.CallToolRequest, in GetInput) (*mc
 
 type UpdateInput struct {
 	ID     string `json:"id" jsonschema:"the memory id to update"`
-	Status string `json:"status" jsonschema:"new lifecycle status: 'deprecated' (retire it) or 'merged' (it was consolidated into another memory). Retirement is one-way; a retired memory cannot be set back to active. A retired governance memory stops being delivered to future sessions."`
+	Status string `json:"status" jsonschema:"new lifecycle status: 'deprecated' (retire it) or 'merged' (it was consolidated into another memory). Retirement is one-way; a retired rule cannot be set back to active."`
 }
 type UpdateOutput struct {
 	Entry Entry `json:"entry"`
@@ -215,7 +215,7 @@ func main() {
 	}, getHandler)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_update",
-		Description: "Retire a memory: set its status to 'deprecated' (it no longer holds) or 'merged' (it was consolidated into another memory). Use this for a governance rule that has stopped applying; a retired governance memory is no longer delivered to future sessions. The file is kept for history. Retirement is one-way -- to make a retired rule apply again, write the current rule as a new memory rather than reviving the old text.",
+		Description: "Retire a governance rule: set its status to 'deprecated' (it no longer holds) or 'merged' (it was consolidated into another memory) so it stops being delivered to future sessions. The file is kept for history. Governance memories only -- the lifecycle is about what gets injected, and context memories are never injected, so this is refused for them. Retirement is one-way: to make a retired rule apply again, write the current rule as a new memory rather than reviving the old text.",
 	}, updateHandler)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_governance",

@@ -238,6 +238,26 @@ func TestGovernanceStatusLifecycle(t *testing.T) {
 	if _, err := s.Update(keep.ID, "archived"); err == nil {
 		t.Fatal("Update accepted an invalid status")
 	}
+
+	// The lifecycle is about what reaches a session's instructions, and context
+	// memories never do, so a status on one would report success for a no-op:
+	// recent and search do not filter on it.
+	ctx, err := s.Add("ordinary working note", []string{"note"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Update(ctx.ID, "deprecated"); err == nil {
+		t.Fatal("Update retired a context memory")
+	}
+	if got, err := s.Get(ctx.ID); err != nil || got.Status != "active" {
+		t.Fatalf("refused call must leave the context memory untouched: %+v, %v", got, err)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(dir, ctx.ID+".md")); strings.Contains(string(raw), "status:") {
+		t.Fatalf("refused call must not write a status field:\n%s", raw)
+	}
+	if recent, _ := s.Recent(10); len(recent) != 1 || recent[0].ID != ctx.ID {
+		t.Fatalf("context memory should still be returned by Recent, got %+v", recent)
+	}
 }
 
 func TestLegacyGovernanceWithoutStatusIsActive(t *testing.T) {
