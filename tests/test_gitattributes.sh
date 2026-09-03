@@ -75,4 +75,29 @@ fi
 grep -q '^\*\.png binary$' "$root/.gitattributes" ||
   { echo "uninstall dropped the user rule" >&2; exit 1; }
 
+# A project installed before the LF rules existed carries a one-line block.
+# Converging it must replace the block in place, not append a second one or
+# strand the old single rule outside the markers.
+legacy=$(mktemp -d "${TMPDIR:-/tmp}/agent-parity-gitattributes-legacy.XXXXXX")
+trap 'rm -rf "$root" "$legacy"' EXIT HUP INT TERM
+git -C "$legacy" init -q
+cat > "$legacy/.gitattributes" <<'LEGACY'
+*.png binary
+# agent-parity:begin
+.agent-parity/memory/*.md merge=agent-parity-memory
+# agent-parity:end
+LEGACY
+
+AGENT_PARITY_RAW="file://$repo" AGENT_PARITY_RELEASE="file://$repo/dist" AGENT_PARITY_VERSION=v9.8.7 AGENT_PARITY_CACHE="$legacy/cache"   sh "$repo/dist/install.sh" "$legacy" > "$legacy/install.out" 2>&1 ||
+    { cat "$legacy/install.out" >&2; exit 1; }
+
+[ "$(grep -c 'agent-parity:begin' "$legacy/.gitattributes")" = 1 ] ||
+  { echo "legacy converge duplicated the block" >&2; cat "$legacy/.gitattributes" >&2; exit 1; }
+[ "$(grep -c 'text eol=lf' "$legacy/.gitattributes")" = 2 ] ||
+  { echo "legacy converge did not add both LF rules" >&2; cat "$legacy/.gitattributes" >&2; exit 1; }
+[ "$(grep -c 'merge=agent-parity-memory' "$legacy/.gitattributes")" = 1 ] ||
+  { echo "legacy merge rule was duplicated or lost" >&2; cat "$legacy/.gitattributes" >&2; exit 1; }
+grep -q '^\*\.png binary$' "$legacy/.gitattributes" ||
+  { echo "legacy converge dropped the user rule" >&2; exit 1; }
+
 echo "gitattributes managed block: OK"
