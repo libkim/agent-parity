@@ -203,18 +203,35 @@ func TestGovernanceStatusLifecycle(t *testing.T) {
 		t.Fatalf("deprecated file missing status:\n%s", raw)
 	}
 
-	// "merged" is likewise excluded, and reactivating restores injection.
+	// "merged" is likewise excluded, and moving between the two retired values
+	// is still allowed: they disagree on why the rule stopped applying, not on
+	// whether it did.
 	if _, err := s.Update(drop.ID, "merged"); err != nil {
 		t.Fatal(err)
 	}
 	if gov, _ := s.Governance(); len(gov) != 1 {
 		t.Fatalf("merged governance should stay out of Governance(), got %+v", gov)
 	}
-	if _, err := s.Update(drop.ID, "active"); err != nil {
-		t.Fatal(err)
+
+	// Retirement is one-way. Reinstating a rule means writing it again as a new
+	// memory, so a retired one can never be set back to active.
+	if _, err := s.Update(drop.ID, "active"); err == nil {
+		t.Fatal("Update reactivated a retired memory")
 	}
-	if gov, _ := s.Governance(); len(gov) != 2 {
-		t.Fatalf("reactivated governance should return to Governance(), got %+v", gov)
+	if got, err := s.Get(drop.ID); err != nil || got.Status != "merged" {
+		t.Fatalf("rejected reactivation must leave the memory retired: %+v, %v", got, err)
+	}
+	if gov, _ := s.Governance(); len(gov) != 1 {
+		t.Fatalf("rejected reactivation must not restore injection, got %+v", gov)
+	}
+
+	// The same holds for a memory that is still active: "active" is not a
+	// status this API sets, so the call is refused rather than silently passing.
+	if _, err := s.Update(keep.ID, "active"); err == nil {
+		t.Fatal("Update accepted \"active\" as a target status")
+	}
+	if gov, _ := s.Governance(); len(gov) != 1 || gov[0].ID != keep.ID {
+		t.Fatalf("refused call must leave the active rule untouched, got %+v", gov)
 	}
 
 	// An unknown status is rejected.

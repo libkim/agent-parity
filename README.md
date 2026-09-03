@@ -282,7 +282,7 @@ tools an agent calls.
 | `memory_recent` | Return the newest context memories, latest first |
 | `memory_search` | Search tags and body keywords, ranking a tag match above a body-text match |
 | `memory_get` | Fetch one memory by id |
-| `memory_update` | Change a memory's status to active, deprecated, or merged |
+| `memory_update` | Retire a memory: set its status to deprecated or merged |
 | `memory_governance` | List governance by status, retired ones included |
 
 Each memory is a markdown file with `created` and `tags` frontmatter. Ranking is
@@ -302,9 +302,12 @@ mid-session applies to the next session onward, and to the current one it is
 already in the conversation. A governance rule that no longer holds, or that was
 folded into a broader one, is retired with `memory_update`: setting its status
 to `deprecated` or `merged` drops it from the startup instructions while keeping
-the file for history. `memory_governance` lists the rules by status, retired ones
-included, so a deprecated or merged rule can be reviewed or reactivated;
-`memory_recent` and `memory_search` never return governance. The injected rules
+the file for history. Retirement is one-way: to make a
+retired rule apply again, write the current rule as a new governance memory
+rather than reviving text whose reasons are no longer on record.
+`memory_governance` lists the rules by status, retired ones included, so what
+was retired can be reviewed before writing a replacement; `memory_recent` and
+`memory_search` never return governance. The injected rules
 are each prefixed with their memory id so an agent can retire one in place.
 
 A memory is normally created once under a unique id, so two machines rarely

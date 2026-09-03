@@ -104,6 +104,11 @@ func mergeMemoryFiles(basePath, oursPath, theirsPath string) error {
 // just because the other machine still had it running; between the two retired
 // values, which only disagree on why the rule was retired, deprecated wins. A
 // missing base leaves no way to tell who moved, so it takes the same path.
+//
+// Store.Update refuses to reactivate, so a retired-to-active move no longer
+// comes from the API. It can still reach the driver from a hand-edited file or
+// a machine running an older server, and the ranking is what keeps those from
+// reviving a rule, so the case stays handled rather than assumed away.
 func mergeStatus(hasBase bool, base, ours, theirs string) string {
 	b, o, t := memoryStatus(base), memoryStatus(ours), memoryStatus(theirs)
 	if o == t {

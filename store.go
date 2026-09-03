@@ -234,7 +234,7 @@ func (s *Store) Recent(limit int) ([]Entry, error) {
 
 // GovernanceByStatus returns governance memories filtered by status, newest
 // first. An empty status returns every governance memory regardless of status,
-// so retired rules stay discoverable for review or reactivation even though they
+// so retired rules stay discoverable for review even though they
 // are excluded from recent, search, and the injected Instructions.
 func (s *Store) GovernanceByStatus(status string) ([]Entry, error) {
 	s.mu.Lock()
@@ -289,18 +289,23 @@ func (s *Store) Get(id string) (Entry, error) {
 	return s.read(id)
 }
 
-// Update sets the lifecycle status of an existing memory. status must be
-// "active", "deprecated", or "merged". A governance memory that is not active
-// is dropped from the server Instructions, so this is how a standing rule is
-// retired or folded into a broader one without deleting its file.
+// Update retires an existing memory. status must be "deprecated" or "merged":
+// retirement is one-way, so there is no path back to active. A governance
+// memory that is not active is dropped from the server Instructions, so this is
+// how a standing rule stops applying without deleting its file, and a rule that
+// has stopped applying stays stopped -- reinstating one means writing the
+// current rule as a new memory, which leaves the reversal visible in the store
+// instead of silently reviving text whose reasons are no longer on record.
 func (s *Store) Update(id, status string) (Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	switch status {
-	case "active", "deprecated", "merged":
+	case "deprecated", "merged":
+	case "active":
+		return Entry{}, fmt.Errorf("cannot reactivate %s: retirement is one-way -- add the rule again as a new memory instead", id)
 	default:
-		return Entry{}, fmt.Errorf("invalid status %q (want active, deprecated, or merged)", status)
+		return Entry{}, fmt.Errorf("invalid status %q (want deprecated or merged)", status)
 	}
 	e, err := s.read(id)
 	if err != nil {

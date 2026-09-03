@@ -97,7 +97,7 @@ func getHandler(ctx context.Context, req *mcp.CallToolRequest, in GetInput) (*mc
 
 type UpdateInput struct {
 	ID     string `json:"id" jsonschema:"the memory id to update"`
-	Status string `json:"status" jsonschema:"new lifecycle status: 'active', 'deprecated' (retire it), or 'merged' (it was consolidated into another memory). A non-active governance memory stops being delivered to future sessions."`
+	Status string `json:"status" jsonschema:"new lifecycle status: 'deprecated' (retire it) or 'merged' (it was consolidated into another memory). Retirement is one-way; a retired memory cannot be set back to active. A retired governance memory stops being delivered to future sessions."`
 }
 type UpdateOutput struct {
 	Entry Entry `json:"entry"`
@@ -182,7 +182,7 @@ func main() {
 		"At the start of a session, call memory_recent to load prior context before acting. " +
 		"When the user reveals an intent, decision, or preference worth keeping, and when a task reaches a checkpoint or finishes, call memory_add with the fact and its reason. " +
 		"Call memory_add with type 'governance' only for a durable project rule that must hold in every future session; those are delivered below automatically and are not returned by recent or search. Everything else is ordinary context. " +
-		"When a governance rule no longer holds or is folded into a broader one, call memory_update to set its status to 'deprecated' or 'merged' so it stops reaching future sessions rather than leaving a stale rule in force; call memory_governance to review or reactivate retired rules, since recent and search omit governance. " +
+		"When a governance rule no longer holds or is folded into a broader one, call memory_update to set its status to 'deprecated' or 'merged' so it stops reaching future sessions rather than leaving a stale rule in force. Retirement is one-way: to make a retired rule apply again, write the current rule as a new governance memory instead. Call memory_governance to review what was retired, since recent and search omit governance. " +
 		"When a past topic or decision becomes relevant, call memory_search before acting. " +
 		"Store durable context, not secrets, one-off chatter, or facts another source already enforces. " +
 		"Memories are saved as plaintext and committed to the repo, which may be shared or public, so never store credentials, tokens, keys, or other sensitive data."
@@ -215,11 +215,11 @@ func main() {
 	}, getHandler)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_update",
-		Description: "Change a memory's lifecycle status: 'active', 'deprecated' (retire it), or 'merged' (it was consolidated into another memory). Use this to retire a governance rule that no longer holds or was folded into a broader one; a non-active governance memory is no longer delivered to future sessions. The file is kept for history.",
+		Description: "Retire a memory: set its status to 'deprecated' (it no longer holds) or 'merged' (it was consolidated into another memory). Use this for a governance rule that has stopped applying; a retired governance memory is no longer delivered to future sessions. The file is kept for history. Retirement is one-way -- to make a retired rule apply again, write the current rule as a new memory rather than reviving the old text.",
 	}, updateHandler)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_governance",
-		Description: "List governance memories (the project's standing rules), optionally filtered by status: 'active', 'deprecated', or 'merged'. Unlike memory_search, this includes retired rules, so use it to find the id of a deprecated or merged rule to reactivate with memory_update, or to review what was retired. Active rules already arrive in the session instructions, so this is for lifecycle review, not routine recall.",
+		Description: "List governance memories (the project's standing rules), optionally filtered by status: 'active', 'deprecated', or 'merged'. Unlike memory_search, this includes retired rules, so use it to review what was retired and why before writing a replacement. Active rules already arrive in the session instructions, so this is for lifecycle review, not routine recall.",
 	}, governanceHandler)
 
 	// A stdio server ending because the client disconnected (EOF) is normal,
