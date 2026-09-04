@@ -334,6 +334,16 @@ func mergeTOML(path string, raw []byte, command string) error {
 	// A server default also covers tools added in future releases. Existing
 	// per-tool overrides are validated by ensureTOMLMemoryConfig on updates.
 	text += fmt.Sprintf("default_tools_approval_mode = %q\n", codexMemoryApprovalMode)
+	// Appending a table is not valid for every file that parses. If the user
+	// spelled mcp_servers as an inline table, TOML forbids extending that key
+	// with a [mcp_servers.memory] header, and the result would not parse -- so
+	// re-read what we are about to write and keep the file untouched if it
+	// broke, the way retargetTOML, ensureTOMLMemoryConfig and unmergeTOML all do.
+	// Reporting this is the caller's job; a warning leaves the user a config
+	// Codex can still read.
+	if err := toml.Unmarshal([]byte(text), &map[string]any{}); err != nil {
+		return fmt.Errorf("adding the memory server would make this file invalid TOML (%w); its mcp_servers is written in a form that cannot take a [mcp_servers.memory] table -- add the entry by hand", err)
+	}
 	return writeConfigFile(path, []byte(text), 0o644)
 }
 

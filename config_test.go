@@ -555,6 +555,39 @@ func TestMergeTOMLRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+// A file can parse and still be unable to take an appended table: TOML forbids
+// extending a key already defined as an inline-table value. Every other TOML
+// writer here re-reads its output before committing it; mergeTOML did not, so
+// it wrote a file Codex could no longer read and reported success. The file has
+// to survive intact, and the caller has to hear about it.
+func TestMergeTOMLRefusesToBreakAnInlineServersTable(t *testing.T) {
+	for _, content := range []string{
+		"model = \"o3\"\nmcp_servers = { mine = { command = \"my-server\" } }\n",
+		"mcp_servers = {}\n",
+	} {
+		path := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		err := mergeServerConfig(path, ".agent-parity/mcp/memory/run.sh")
+		if err == nil {
+			after, _ := os.ReadFile(path)
+			t.Fatalf("appending to an inline table was reported as success:\n%s", after)
+		}
+		after, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if string(after) != content {
+			t.Fatalf("the refused merge still modified the file:\n%s", after)
+		}
+		// The file must remain something the rest of the tool can read.
+		if uErr := toml.Unmarshal(after, &map[string]any{}); uErr != nil {
+			t.Fatalf("the file no longer parses: %v", uErr)
+		}
+	}
+}
+
 func TestHasMemoryServerRecognizesEquivalentTOML(t *testing.T) {
 	for _, content := range []string{
 		"[mcp_servers.\"memory\"]\ncommand = \"other\"\n",
