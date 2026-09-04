@@ -43,7 +43,7 @@ elif [ -e "$ag" ] && grep -q "memory MCP server" "$ag" 2>/dev/null; then
   echo "AGENTS.md: has a legacy unmarked memory instruction -- remove it manually"
 fi
 ga="$TARGET/.gitattributes"
-ga_state=$(managed_block_state "$ga" "$GI_BEGIN" "$GI_END")
+ga_state=$(managed_block_state "$ga" "$HASH_MARK_BEGIN" "$HASH_MARK_END")
 if [ "$ga_state" = valid ]; then
   strip_gitattributes_block
   [ -s "$TARGET/.gitattributes" ] || rm -f "$TARGET/.gitattributes"
@@ -60,7 +60,7 @@ if in_git_repo; then
   fi
 fi
 gi="$TARGET/.gitignore"
-gi_state=$(managed_block_state "$gi" "$GI_BEGIN" "$GI_END")
+gi_state=$(managed_block_state "$gi" "$HASH_MARK_BEGIN" "$HASH_MARK_END")
 if [ "$gi_state" = valid ]; then
   strip_gitignore_block
   echo ".gitignore: removed agent-parity block"

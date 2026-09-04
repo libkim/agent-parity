@@ -19,10 +19,16 @@ $ClaudeTgt = ".claude/settings.json"
 $ClaudeHook = '.agent-parity/bin/agent-parity sync-claude'
 $MarkBegin = "<!-- agent-parity:begin -->"
 $MarkEnd = "<!-- agent-parity:end -->"
-$GitIgnoreBegin = "# agent-parity:begin"
-$GitIgnoreEnd = "# agent-parity:end"
+$HashMarkBegin = "# agent-parity:begin"
+$HashMarkEnd = "# agent-parity:end"
 $MergeDriverCmd = '.agent-parity/scripts/merge-memory.sh %O %A %B'
-$GaLine = ".agent-parity/memory/*.md merge=agent-parity-memory"
+$GaMergeLine = ".agent-parity/memory/*.md merge=agent-parity-memory"
+# git runs our merge driver and pre-push guard through sh on every OS, so the
+# scripts stay LF; the target repo's own shell scripts are left alone.
+$GaShLine = ".agent-parity/**/*.sh text eol=lf"
+# The project launcher is the same kind of shell script with no .sh name,
+# so the suffix rule above misses it.
+$GaLauncherLine = ".agent-parity/bin/agent-parity text eol=lf"
 $PrePushMarker = '# agent-parity managed pre-push hook'
 $Artifacts = @(".mcp.json", ".cursor", ".codex", ".agents", ".agent-parity", "AGENTS.md", "CLAUDE.md")
 $ParityBreakers = @(
@@ -242,8 +248,8 @@ function Strip-GitIgnoreBlock {
   $out = New-Object System.Collections.Generic.List[string]
   $inBlock = $false
   foreach ($line in $lines) {
-    if ($line -eq $GitIgnoreBegin) { $inBlock = $true; continue }
-    if ($line -eq $GitIgnoreEnd) { $inBlock = $false; continue }
+    if ($line -eq $HashMarkBegin) { $inBlock = $true; continue }
+    if ($line -eq $HashMarkEnd) { $inBlock = $false; continue }
     if (!$inBlock) { $out.Add($line) }
   }
   Write-Text $gi (($out -join "`n").TrimEnd("`n") + "`n")
@@ -257,8 +263,8 @@ function Strip-GitAttributesBlock {
   $out = New-Object System.Collections.Generic.List[string]
   $inBlock = $false
   foreach ($line in $lines) {
-    if ($line -eq $GitIgnoreBegin) { $inBlock = $true; continue }
-    if ($line -eq $GitIgnoreEnd) { $inBlock = $false; continue }
+    if ($line -eq $HashMarkBegin) { $inBlock = $true; continue }
+    if ($line -eq $HashMarkEnd) { $inBlock = $false; continue }
     if (!$inBlock) { $out.Add($line) }
   }
   Write-Text $ga (($out -join "`n").TrimEnd("`n") + "`n")

@@ -1,4 +1,6 @@
 *.sh text eol=lf
 # agent-parity:begin
 .agent-parity/memory/*.md merge=agent-parity-memory
+.agent-parity/**/*.sh text eol=lf
+.agent-parity/bin/agent-parity text eol=lf
 # agent-parity:end

@@ -14,10 +14,16 @@ CLAUDE_TGT=".claude/settings.json"
 CLAUDE_HOOK='.agent-parity/bin/agent-parity sync-claude'
 MARK_BEGIN="<!-- agent-parity:begin -->"
 MARK_END="<!-- agent-parity:end -->"
-GI_BEGIN="# agent-parity:begin"
-GI_END="# agent-parity:end"
+HASH_MARK_BEGIN="# agent-parity:begin"
+HASH_MARK_END="# agent-parity:end"
 MERGE_DRIVER_CMD='.agent-parity/scripts/merge-memory.sh %O %A %B'
-GA_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
+GA_MERGE_LINE=".agent-parity/memory/*.md merge=agent-parity-memory"
+# git runs our merge driver and pre-push guard through sh on every OS, so the
+# scripts stay LF; the target repo's own shell scripts are left alone.
+GA_SH_LINE=".agent-parity/**/*.sh text eol=lf"
+# The project launcher is the same kind of shell script with no .sh name,
+# so the suffix rule above misses it.
+GA_LAUNCHER_LINE=".agent-parity/bin/agent-parity text eol=lf"
 PRE_PUSH_MARKER='# agent-parity managed pre-push hook'
 # Everything install may create at the target's top level. gitignore syncing
 # and the status report both derive from this one list.
@@ -265,7 +271,7 @@ managed_block_state() {
 strip_gitignore_block() {
   gi="$TARGET/.gitignore"
   make_local_temp_for "$gi"
-  awk -v b="$GI_BEGIN" -v e="$GI_END" '
+  awk -v b="$HASH_MARK_BEGIN" -v e="$HASH_MARK_END" '
     { line = $0; sub(/\r$/, "", line) }
     line == b { inblock = 1; next }
     line == e { inblock = 0; next }
@@ -277,7 +283,7 @@ strip_gitignore_block() {
 strip_gitattributes_block() {
   ga="$TARGET/.gitattributes"
   make_local_temp_for "$ga"
-  awk -v b="$GI_BEGIN" -v e="$GI_END" '
+  awk -v b="$HASH_MARK_BEGIN" -v e="$HASH_MARK_END" '
     { line = $0; sub(/\r$/, "", line) }
     line == b { inblock = 1; next }
     line == e { inblock = 0; next }
